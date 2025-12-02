@@ -7,52 +7,93 @@ class Profile(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+    # -------------------------
+    # Global Message Event
+    # -------------------------
     @commands.Cog.listener()
     async def on_message(self, message):
         if message.author.bot:
             return
 
-        logger.debug(f"Message received from {message.author} ({message.author.id}): {message.content}")
+        user_id = str(message.author.id)
+        content = message.content
 
-        # Ensure the user exists
-        await add_user(str(message.author.id))
-        logger.debug(f"Ensured user {message.author.id} exists in DB.")
-
-        # Update XP and message count
-        await update_user(str(message.author.id))
-        logger.debug(f"Updated XP/messages/aura for user {message.author.id}")
-
-        # Allow commands to work
-        await self.bot.process_commands(message)
-
-    @commands.command()
-    async def profile(self, ctx):
-        user = await get_user(str(ctx.author.id))
-        if user is None:
-            logger.warning(f"Profile command: User {ctx.author.id} not found in DB")
-            return await ctx.send("User not found in database.")
-
-        # Unpack all 6 fields
-        user_id, xp, level, messages, aura, aura_pool = user
-        logger.info(f"Profile command used by {ctx.author} ({ctx.author.id}) - Level: {level}, XP: {xp}, Messages: {messages}, Aura: {aura}, Aura Pool: {aura_pool}")
-
-        embed = discord.Embed(
-            title=f"{ctx.author.name}'s Profile",
-            description="Your stats so far:",
-            color=0x00ff99
+        logger.debug(
+            f"[PROFILE COG] Message received from {message.author} "
+            f"({user_id}): {content}"
         )
 
-        embed.set_thumbnail(url=ctx.author.avatar.url)
-        embed.add_field(name="⭐ Level", value=level, inline=True)
-        embed.add_field(name="🔥 XP", value=xp, inline=True)
-        embed.add_field(name="💬 Messages", value=messages, inline=True)
-        embed.add_field(name="✨ Aura", value=aura, inline=True)
-        embed.add_field(name="💠 Aura Pool", value=aura_pool, inline=True)
-        embed.set_footer(text="Realm Royz Profile System")
+        # ensure user exists
+        await add_user(user_id)
+        logger.debug(f"[PROFILE COG] add_user processed: {user_id}")
+
+        # give XP based on message
+        await update_user(user_id)
+        logger.debug(f"[PROFILE COG] Updated stats for: {user_id}")
+
+        # continue commands
+        await self.bot.process_commands(message)
+
+    # -------------------------
+    # PROFILE COMMAND
+    # -------------------------
+    @commands.command(
+        name="profile",
+        brief="Shows your RR profile",
+        description="Displays your current level, XP, aura and message count."
+    )
+    async def profile(self, ctx):
+        user_id = str(ctx.author.id)
+        logger.info(
+            f"[PROFILE CMD] Command used by: {ctx.author} ({user_id})"
+        )
+
+        user = await get_user(user_id)
+
+        # no record (almost impossible now)
+        if user is None:
+            logger.error(f"[PROFILE CMD] User not found in DB: {user_id}")
+            return await ctx.send("No profile found for you yet!")
+
+        # unpack database row
+        # DB ROW: (user_id, xp, level, messages, aura)
+        db_user_id, xp, level, messages, aura = user
+
+        logger.debug(
+            f"[PROFILE CMD] Loaded DB Stats -> ID={db_user_id} | XP={xp} "
+            f"| LVL={level} | MSG={messages} | AURA={aura}"
+        )
+
+        # -------------------------
+        # Make Embed
+        # -------------------------
+        embed = discord.Embed(
+            title=f"🌌 {ctx.author.name}'s Realm Profile",
+            description="**Your known stats in Realm Royz:**",
+            color=discord.Color.teal()
+        )
+
+        try:
+            embed.set_thumbnail(url=ctx.author.avatar.url)
+        except:
+            pass
+
+        embed.add_field(name="⭐ Level", value=f"```{level}```", inline=True)
+        embed.add_field(name="🔥 XP", value=f"```{xp}```", inline=True)
+        embed.add_field(name="💬 Messages", value=f"```{messages}```", inline=True)
+        embed.add_field(name="✨ Aura", value=f"```{aura}```", inline=True)
+
+        embed.set_footer(text="● Realm Royz Profile System")
+        embed.set_author(name=self.bot.user.name)
 
         await ctx.send(embed=embed)
-        logger.debug(f"Sent profile embed to {ctx.author.id}")
+        logger.info(
+            f"[PROFILE CMD] Profile sent successfully for {ctx.author} ({user_id})"
+        )
 
+# -------------------------------------------
+# REQUIRED SETUP FUNCTION
+# -------------------------------------------
 async def setup(bot):
     await bot.add_cog(Profile(bot))
-    logger.info("Profile cog loaded successfully")
+    logger.info("[LOAD] Profile cog loaded")
