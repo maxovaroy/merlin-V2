@@ -1,7 +1,8 @@
 import discord
 from discord.ext import commands
-from database import add_user, get_user, spend_aura
+from database import get_user, add_user, spend_aura
 from logger import logger
+import random
 
 class Aura(commands.Cog):
     def __init__(self, bot):
@@ -9,37 +10,55 @@ class Aura(commands.Cog):
 
     @commands.command(name="aura")
     async def aura(self, ctx, amount: int, member: discord.Member):
-        """Give aura points to another user. Usage: !aura <amount> @user"""
-        sender = ctx.author
-
-        if sender.id == member.id:
-            return await ctx.send("❌ You cannot give aura to yourself!")
-
-        if amount <= 0:
-            return await ctx.send("❌ Amount must be greater than 0!")
-
-        if amount > 100:
-            amount = 100  # Cap at 100 per use
+        """Give or take aura points from another user. Usage: !aura <+/-amount> @user"""
+        
+        # Prevent using aura on self
+        if member.id == ctx.author.id:
+            await ctx.send("❌ You cannot give or take aura from yourself!")
+            logger.warning(f"{ctx.author} tried to use aura on themselves.")
+            return
 
         # Ensure both users exist in DB
-        await add_user(str(sender.id))
+        await add_user(str(ctx.author.id))
         await add_user(str(member.id))
 
-        # Attempt to spend aura
-        success = await spend_aura(str(sender.id), str(member.id), amount)
-        if not success:
-            return await ctx.send("❌ You don't have enough aura in your pool!")
+        # Fetch recipient info
+        user = await get_user(str(member.id))
+        if user is None:
+            await ctx.send("User not found in database.")
+            logger.warning(f"Aura command: User {member.id} not found.")
+            return
 
-        # Fetch updated aura pool
-        sender_user = await get_user(str(sender.id))
-        member_user = await get_user(str(member.id))
-        aura_pool = sender_user[5]  # aura_pool column
+        user_id, xp, level, messages, aura, aura_pool = user
 
-        logger.info(f"{sender} gave {amount} aura to {member}. Remaining pool: {aura_pool}")
-        await ctx.send(
-            f"✨ {sender.mention} gave {amount} aura to {member.mention}!\n"
-            f"Your remaining aura pool: **{aura_pool}**"
-        )
+        # If taking aura (-amount), limit max to 100
+        if amount < 0:
+            amount = max(-100, amount)  # -100 is maximum
+            amount = await spend_aura(str(ctx.author.id), -amount)  # Deduct from sender's aura pool
+            if amount <= 0:
+                await ctx.send(f"❌ You don't have enough aura to take from {member.mention}.")
+                return
+            new_aura = max(aura + amount, 0)
+            async with add_user.__globals__['aiosqlite'].connect('database.db') as db:
+                await db.execute("UPDATE users SET aura = ? WHERE user_id = ?", (new_aura, str(member.id)))
+                await db.commit()
+            await ctx.send(f"✨ {ctx.author.mention} took {amount} aura from {member.mention}! They now have {new_aura} aura.")
+            logger.info(f"{ctx.author} took {amount} aura from {member}. New aura: {new_aura}")
+            return
+
+        # If giving aura (+amount), use from sender's aura pool
+        spent = await spend_aura(str(ctx.author.id), amount)
+        if spent <= 0:
+            await ctx.send("❌ You don't have enough aura in your pool to give.")
+            return
+
+        new_aura = aura + spent
+        async with add_user.__globals__['aiosqlite'].connect('database.db') as db:
+            await db.execute("UPDATE users SET aura = ? WHERE user_id = ?", (new_aura, str(member.id)))
+            await db.commit()
+
+        await ctx.send(f"✨ {ctx.author.mention} gave {spent} aura to {member.mention}! They now have {new_aura} aura.")
+        logger.info(f"{ctx.author} gave {spent} aura to {member}. New aura: {new_aura}")
 
 async def setup(bot):
     await bot.add_cog(Aura(bot))
