@@ -1,13 +1,10 @@
 import aiosqlite
-import asyncio
 
-class Database:
-    def __init__(self):
-        self.db = None
+DB_PATH = "database.db"
 
-    async def connect(self):
-        self.db = await aiosqlite.connect("merlin.db")
-        await self.db.execute("""
+async def init_db():
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 user_id TEXT PRIMARY KEY,
                 xp INTEGER DEFAULT 0,
@@ -16,24 +13,29 @@ class Database:
                 aura INTEGER DEFAULT 0
             )
         """)
-        await self.db.commit()
+        await db.commit()
 
-    async def add_message(self, uid):
-        await self.db.execute("""
-            INSERT OR IGNORE INTO users (user_id) VALUES (?)
-        """, (uid,))
+async def add_user(user_id):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("""
+            INSERT OR IGNORE INTO users (user_id)
+            VALUES (?)
+        """, (str(user_id),))
+        await db.commit()
 
-        await self.db.execute("""
-            UPDATE users SET messages = messages + 1, xp = xp + 5
+async def update_user(user_id, xp_gain=10):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("""
+            UPDATE users
+            SET xp = xp + ?, messages = messages + 1
             WHERE user_id = ?
-        """, (uid,))
+        """, (xp_gain, str(user_id)))
+        await db.commit()
 
-        await self.db.commit()
-
-    async def get_user(self, uid):
-        cursor = await self.db.execute(
-            "SELECT * FROM users WHERE user_id = ?", (uid,)
+async def get_user(user_id):
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            "SELECT * FROM users WHERE user_id = ?",
+            (str(user_id),)
         )
         return await cursor.fetchone()
-
-db = Database()
