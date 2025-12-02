@@ -22,8 +22,7 @@ class Profile(commands.Cog):
         await update_user(str(message.author.id))
         logger.debug(f"Updated XP/messages/aura for user {message.author.id}")
 
-        # Allow commands to work
-        await self.bot.process_commands(message)
+        # ✅ Removed the command processing line here to avoid duplicates
 
     @commands.command()
     async def profile(self, ctx):
