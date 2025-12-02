@@ -1,5 +1,6 @@
 import aiosqlite
 import math
+from logger import logger  # Import the logger we created
 
 DB_PATH = "database.db"
 
@@ -16,6 +17,7 @@ async def init_db():
             )
         """)
         await db.commit()
+    logger.info("Database initialized!")
 
 # Add user if not exists
 async def add_user(user_id: str):
@@ -24,6 +26,7 @@ async def add_user(user_id: str):
             INSERT OR IGNORE INTO users(user_id) VALUES(?)
         """, (user_id,))
         await db.commit()
+    logger.debug(f"User added or already exists: {user_id}")
 
 # Update user XP, messages, and aura
 async def update_user(user_id: str, xp_gain: int = 10):
@@ -35,6 +38,7 @@ async def update_user(user_id: str, xp_gain: int = 10):
                 messages = messages + 1
             WHERE user_id = ?
         """, (xp_gain, user_id))
+        logger.debug(f"Added {xp_gain} XP and incremented messages for user: {user_id}")
 
         # Get updated XP and messages
         cursor = await db.execute("SELECT xp, level, messages FROM users WHERE user_id = ?", (user_id,))
@@ -52,6 +56,7 @@ async def update_user(user_id: str, xp_gain: int = 10):
                     aura = ?
                 WHERE user_id = ?
             """, (new_level, aura, user_id))
+            logger.debug(f"Updated user {user_id}: level={new_level}, aura={aura}, messages={messages}, xp={xp}")
 
         await db.commit()
 
@@ -59,4 +64,6 @@ async def update_user(user_id: str, xp_gain: int = 10):
 async def get_user(user_id: str):
     async with aiosqlite.connect(DB_PATH) as db:
         cursor = await db.execute("SELECT * FROM users WHERE user_id = ?", (user_id,))
-        return await cursor.fetchone()
+        user = await cursor.fetchone()
+    logger.debug(f"Fetched user {user_id}: {user}")
+    return user
