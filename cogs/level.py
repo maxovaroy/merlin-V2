@@ -262,7 +262,15 @@ class LevelCog(commands.Cog, name="LevelSystem"):
         new_level = level + 1
         new_xp = xp_for_level(new_level)
         await self._ensure_set_user_values(str(user.id), new_xp, new_level)
+
+    # Send message in LEVEL_UP_CHANNEL_ID
+    channel = ctx.guild.get_channel(LEVEL_UP_CHANNEL_ID)
+    if channel:
+        await channel.send(f"{user.mention}, leveled up to **Level {new_level}**! 🎉")
+    else:
+        # fallback to ctx if channel not found
         await ctx.send(f"✅ {user.display_name} instantly leveled up to **Level {new_level}**!")
+
 
     @commands.command(name="setxp")
     @commands.has_permissions(administrator=True)
