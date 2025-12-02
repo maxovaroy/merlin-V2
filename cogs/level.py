@@ -32,7 +32,7 @@ COMMAND_PREFIX = "!"  # used to skip awarding XP for commands
 XP_PER_MESSAGE = 6  # XP awarded per message
 LEVEL_XP_BASE = 100  # XP per level
 COOLDOWN_SECONDS = 12  # cooldown between XP gains per user per guild
-LEVEL_UP_ANNOUNCE_CHANNEL = None  # if set to a channel name, level-up messages go there
+LEVEL_UP_CHANNEL_ID = None  # if set to a channel name, level-up messages go there
 
 # Role rewards mapping (guild_id -> {level:int -> role_id:int})
 REWARD_ROLES: Dict[int, Dict[int, int]] = {}
@@ -193,19 +193,19 @@ class LevelCog(commands.Cog, name="LevelSystem"):
         new_xp, new_level, leveled = await self.force_add_xp(guild_id, user_id, amount)
 
         # Send level-up message if leveled up
-        if leveled and message is not None:
-            guild = message.guild
-            member = message.author
-            channel = None
-            if LEVEL_UP_ANNOUNCE_CHANNEL:
-                channel = discord.utils.get(guild.text_channels, name=LEVEL_UP_ANNOUNCE_CHANNEL)
-            if channel is None:
-                channel = message.channel  # fallback to same channel
-            await channel.send(f"{member.mention}, leveled up to **Level {new_level}**! 🎉")
-            # Assign reward role if any
-            await self._maybe_assign_role_reward(guild, member, new_level)
-
-        return new_xp, new_level, leveled
+        if leveled:
+            try:
+                guild = self.bot.get_guild(guild_id)
+                if guild:
+                    channel = guild.get_channel(LEVEL_UP_CHANNEL_ID)  # using ID, not name
+                    if channel:
+                        member = guild.get_member(user_id)
+                        await channel.send(f"{member.mention}, leveled up to **Level {new_level}**! 🎉")
+            except Exception as e:
+                if hasattr(self.bot, "logger"):
+                    self.bot.logger.error(f"[LevelCog] Failed to send level-up message: {e}")
+                else:
+                    print(f"[LevelCog] Failed to send level-up message: {e}")
 
 
     # ----------------------------
