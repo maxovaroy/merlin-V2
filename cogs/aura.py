@@ -8,7 +8,7 @@ class Aura(commands.Cog):
         self.bot = bot
 
     @commands.command(name="aura")
-    @commands.has_permissions(administrator=True)  # Only admins can change aura
+    @commands.has_permissions(administrator=False)  # Only admins can change aura
     async def aura(self, ctx, amount: int, member: discord.Member):
         """Give or take aura points from a user. Usage: !aura <+/-amount> @user"""
         # Ensure the member exists in DB
