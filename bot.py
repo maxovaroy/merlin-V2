@@ -1,7 +1,7 @@
 import discord
 from discord.ext import commands
 import config
-from database import db
+from database import init_db, add_user, update_user
 
 intents = discord.Intents.default()
 intents.message_content = True
