@@ -32,7 +32,7 @@ COMMAND_PREFIX = "!"  # used to skip awarding XP for commands
 XP_PER_MESSAGE = 6  # XP awarded per message
 LEVEL_XP_BASE = 100  # XP per level
 COOLDOWN_SECONDS = 12  # cooldown between XP gains per user per guild
-LEVEL_UP_CHANNEL_ID = None  # if set to a channel name, level-up messages go there
+LEVEL_UP_CHANNEL_ID = 1305771250693705818  # if set to a channel name, level-up messages go there
 
 # Role rewards mapping (guild_id -> {level:int -> role_id:int})
 REWARD_ROLES: Dict[int, Dict[int, int]] = {}
