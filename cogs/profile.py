@@ -1,7 +1,7 @@
 import discord
 from discord.ext import commands
-from database import add_user, update_user, get_user, get_aura_pool  # Added get_aura_pool
-from logger import logger
+from database import get_user, add_user, update_user
+from logger import logger  # Added logger import
 
 class Profile(commands.Cog):
     def __init__(self, bot):
@@ -32,11 +32,7 @@ class Profile(commands.Cog):
             logger.warning(f"Profile command: User {ctx.author.id} not found in DB")
             return await ctx.send("User not found in database.")
 
-        user_id, xp, level, messages, aura = user
-
-        # Fetch current aura pool
-        aura_pool = await get_aura_pool(str(ctx.author.id))
-
+        user_id, xp, level, messages, aura, aura_pool = user
         logger.info(f"Profile command used by {ctx.author} ({ctx.author.id}) - Level: {level}, XP: {xp}, Messages: {messages}, Aura: {aura}, Aura Pool: {aura_pool}")
 
         embed = discord.Embed(
@@ -49,8 +45,8 @@ class Profile(commands.Cog):
         embed.add_field(name="⭐ Level", value=level, inline=True)
         embed.add_field(name="🔥 XP", value=xp, inline=True)
         embed.add_field(name="💬 Messages", value=messages, inline=True)
-        embed.add_field(name="✨ Aura Used", value=aura, inline=True)
-        embed.add_field(name="💠 Aura Pool", value=aura_pool, inline=True)  # New field
+        embed.add_field(name="✨ Aura", value=aura, inline=True)
+        embed.add_field(name="💠 Aura Pool", value=aura_pool, inline=True)  # Display aura pool
         embed.set_footer(text="Realm Royz Profile System")
 
         await ctx.send(embed=embed)
