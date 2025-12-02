@@ -12,6 +12,9 @@ class Profile(commands.Cog):
             return
 
         await db.add_message(str(message.author.id))
+        await add_user(message.author.id)
+        await update_user(message.author.id)
+
 
     @commands.command()
     async def profile(self, ctx):
