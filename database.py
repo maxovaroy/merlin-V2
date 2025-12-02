@@ -1,6 +1,6 @@
 import aiosqlite
 import math
-from logger import logger  # Import the logger we created
+from logger import logger
 
 DB_PATH = "database.db"
 
@@ -13,7 +13,8 @@ async def init_db():
                 xp INTEGER DEFAULT 0,
                 level INTEGER DEFAULT 1,
                 messages INTEGER DEFAULT 0,
-                aura INTEGER DEFAULT 0
+                aura INTEGER DEFAULT 0,
+                aura_pool INTEGER DEFAULT 0
             )
         """)
         await db.commit()
@@ -46,14 +47,13 @@ async def update_user(user_id: str, xp_gain: int = 10):
         if row:
             xp, level, messages = row
             # Calculate new level
-            new_level = int(math.sqrt(xp // 10)) + 1  # Simple XP -> Level formula
-            aura = messages // 5  # 1 aura per 5 messages
+            new_level = int(math.sqrt(xp // 10)) + 1
+            aura = messages // 5
 
             # Update level and aura
             await db.execute("""
                 UPDATE users
-                SET level = ?,
-                    aura = ?
+                SET level = ?, aura = ?
                 WHERE user_id = ?
             """, (new_level, aura, user_id))
             logger.debug(f"Updated user {user_id}: level={new_level}, aura={aura}, messages={messages}, xp={xp}")
@@ -67,3 +67,32 @@ async def get_user(user_id: str):
         user = await cursor.fetchone()
     logger.debug(f"Fetched user {user_id}: {user}")
     return user
+
+# Update aura pool for a user
+async def update_aura_pool(user_id: str, amount: int):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("""
+            UPDATE users
+            SET aura_pool = aura_pool + ?
+            WHERE user_id = ?
+        """, (amount, user_id))
+        await db.commit()
+    logger.debug(f"Updated aura pool for {user_id} by {amount}")
+
+# Set aura pool (used when initializing or deducting)
+async def set_aura_pool(user_id: str, amount: int):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("""
+            UPDATE users
+            SET aura_pool = ?
+            WHERE user_id = ?
+        """, (amount, user_id))
+        await db.commit()
+    logger.debug(f"Set aura pool for {user_id} to {amount}")
+
+# Get aura pool
+async def get_aura_pool(user_id: str):
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute("SELECT aura_pool FROM users WHERE user_id = ?", (user_id,))
+        row = await cursor.fetchone()
+    return row[0] if row else 0
