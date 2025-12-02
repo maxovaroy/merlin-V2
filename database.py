@@ -1,7 +1,7 @@
 import aiosqlite
 import math
 import random
-from logger import logger
+from logger import logger  # Logger for debug and info messages
 
 DB_PATH = "database.db"
 
@@ -30,10 +30,27 @@ async def add_user(user_id: str):
         await db.commit()
     logger.debug(f"User added or already exists: {user_id}")
 
-# Update user XP, messages, aura, and aura_pool
+# Calculate new level from XP
+def calculate_level(xp):
+    return int(math.sqrt(xp // 10)) + 1
+
+# Determine aura reward when leveling up
+def get_aura_reward(level):
+    if level <= 10:
+        return random.randint(1, 100)
+    elif 11 <= level <= 20:
+        return random.randint(101, 300)
+    elif 21 <= level <= 30:
+        return random.randint(301, 500)
+    elif 31 <= level <= 40:
+        return random.randint(501, 700)
+    else:
+        return random.randint(701, 1000)
+
+# Update user XP, messages, aura, and aura pool
 async def update_user(user_id: str, xp_gain: int = 10):
     async with aiosqlite.connect(DB_PATH) as db:
-        # Add XP and messages
+        # Add XP and increment messages
         await db.execute("""
             UPDATE users
             SET xp = xp + ?,
@@ -41,30 +58,21 @@ async def update_user(user_id: str, xp_gain: int = 10):
             WHERE user_id = ?
         """, (xp_gain, user_id))
 
-        # Get updated XP, level, messages, aura, and aura_pool
-        cursor = await db.execute("SELECT xp, level, messages, aura_pool FROM users WHERE user_id = ?", (user_id,))
+        # Get updated user info
+        cursor = await db.execute("SELECT xp, level, messages, aura, aura_pool FROM users WHERE user_id = ?", (user_id,))
         row = await cursor.fetchone()
         if row:
-            xp, level, messages, aura_pool = row
-            # Calculate new level
-            new_level = int(math.sqrt(xp // 10)) + 1
-            aura = messages // 5  # Aura from messages
+            xp, level, messages, aura, aura_pool = row
+            new_level = calculate_level(xp)
 
-            # Check if user leveled up
+            # Give aura pool reward if leveled up
             if new_level > level:
-                # Add random aura_pool points based on level
-                if new_level <= 10:
-                    gained_aura = random.randint(1, 100)
-                elif 11 <= new_level <= 20:
-                    gained_aura = random.randint(101, 300)
-                elif 21 <= new_level <= 30:
-                    gained_aura = random.randint(301, 500)
-                else:
-                    gained_aura = random.randint(501, 1000)
-                aura_pool += gained_aura
-                logger.info(f"User {user_id} leveled up to {new_level}! Gained {gained_aura} aura points in pool.")
+                reward = get_aura_reward(new_level)
+                aura_pool += reward
+                logger.info(f"User {user_id} leveled up from {level} to {new_level}! "
+                            f"Aura pool increased by {reward} to {aura_pool}.")
 
-            # Update level, aura, and aura_pool
+            # Update level, aura, and aura pool
             await db.execute("""
                 UPDATE users
                 SET level = ?,
@@ -84,15 +92,21 @@ async def get_user(user_id: str):
     logger.debug(f"Fetched user {user_id}: {user}")
     return user
 
-# Update aura pool when used on others
-async def modify_aura_pool(user_id: str, amount: int):
+# Spend aura from aura pool
+async def spend_aura(user_id: str, amount: int):
     async with aiosqlite.connect(DB_PATH) as db:
         cursor = await db.execute("SELECT aura_pool FROM users WHERE user_id = ?", (user_id,))
         row = await cursor.fetchone()
         if not row:
-            return 0
-        aura_pool = max(row[0] - amount, 0)  # prevent negative pool
-        await db.execute("UPDATE users SET aura_pool = ? WHERE user_id = ?", (aura_pool, user_id))
+            logger.warning(f"Attempted to spend aura for non-existent user {user_id}")
+            return False
+
+        aura_pool = row[0]
+        if amount > aura_pool:
+            amount = aura_pool  # Limit the maximum spend to available aura
+        aura_pool -= amount
+
+        await db.execute("UPDATE users SET aura_pool = aura_pool - ? WHERE user_id = ?", (amount, user_id))
         await db.commit()
-        logger.debug(f"User {user_id} aura_pool modified by -{amount}, new pool: {aura_pool}")
-        return aura_pool
+        logger.debug(f"User {user_id} spent {amount} aura from aura pool. Remaining: {aura_pool}")
+        return amount
