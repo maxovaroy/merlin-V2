@@ -11,7 +11,7 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 @bot.event
 async def on_ready():
     await init_db()
-    print("🤖 Merlin is online!")
+    print("Database initialized!")
 
 async def main():
     await db.connect()
