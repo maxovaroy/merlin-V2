@@ -47,7 +47,7 @@ class Profile(commands.Cog):
         embed.add_field(name="🔥 XP", value=xp, inline=True)
         embed.add_field(name="💬 Messages", value=messages, inline=True)
         embed.add_field(name="✨ Aura", value=aura, inline=True)
-        embed.add_field(name="🔮 Aura Pool", value=aura_pool, inline=True)
+        embed.add_field(name="💠 Aura Pool", value=aura_pool, inline=True)
         embed.set_footer(text="Realm Royz Profile System")
 
         await ctx.send(embed=embed)
