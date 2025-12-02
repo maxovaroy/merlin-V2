@@ -32,11 +32,9 @@ class Profile(commands.Cog):
             logger.warning(f"Profile command: User {ctx.author.id} not found in DB")
             return await ctx.send("User not found in database.")
 
-        # Unpack all 6 values including aura_pool
+        # Unpack all 6 fields
         user_id, xp, level, messages, aura, aura_pool = user
-
-        logger.info(f"Profile command used by {ctx.author} ({ctx.author.id}) - "
-                    f"Level: {level}, XP: {xp}, Messages: {messages}, Aura: {aura}, Aura Pool: {aura_pool}")
+        logger.info(f"Profile command used by {ctx.author} ({ctx.author.id}) - Level: {level}, XP: {xp}, Messages: {messages}, Aura: {aura}, Aura Pool: {aura_pool}")
 
         embed = discord.Embed(
             title=f"{ctx.author.name}'s Profile",
@@ -49,7 +47,7 @@ class Profile(commands.Cog):
         embed.add_field(name="🔥 XP", value=xp, inline=True)
         embed.add_field(name="💬 Messages", value=messages, inline=True)
         embed.add_field(name="✨ Aura", value=aura, inline=True)
-        embed.add_field(name="⚡ Aura Pool", value=aura_pool, inline=True)
+        embed.add_field(name="🔮 Aura Pool", value=aura_pool, inline=True)
         embed.set_footer(text="Realm Royz Profile System")
 
         await ctx.send(embed=embed)
