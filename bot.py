@@ -1,7 +1,7 @@
 import discord
 from discord.ext import commands
 import config
-from database import init_db, add_user, update_user
+from database import init_db
 from logger import logger
 import asyncio
 
@@ -31,14 +31,6 @@ async def on_command(ctx):
 @bot.event
 async def on_command_error(ctx, error):
     logger.error(f"Error in command {ctx.command} by {ctx.author}: {error}")
-
-# Log every message for debugging
-@bot.event
-async def on_message(message):
-    if message.author.bot:
-        return
-    logger.debug(f"Message from {message.author}: {message.content}")
-    await bot.process_commands(message)
 
 # Main runner
 async def main():
