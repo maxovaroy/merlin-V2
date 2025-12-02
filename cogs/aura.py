@@ -7,76 +7,187 @@ import aiosqlite
 
 DB_PATH = "database.db"
 
+# =======================================================
+#                     AURA SYSTEM COG
+# =======================================================
+# This system handles:
+# - Giving aura
+# - Taking aura
+# - Transferring aura
+# - Aura leaderboard
+# - Aura check command
+#
+# NO MORE AURA POOL ANYWHERE
+# =======================================================
+
+
 class Aura(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    # Aura command
+    # ===================================================
+    # Helper DB functions
+    # ===================================================
+
+    async def get_aura(self, user_id: str):
+        """Returns aura for a specific user"""
+        async with aiosqlite.connect(DB_PATH) as db:
+            cursor = await db.execute(
+                "SELECT aura FROM users WHERE user_id = ?", 
+                (user_id,)
+            )
+            row = await cursor.fetchone()
+            return row[0] if row else 0
+
+    async def set_aura(self, user_id: str, new_amount: int):
+        """Updates aura of a user"""
+        async with aiosqlite.connect(DB_PATH) as db:
+            await db.execute(
+                "UPDATE users SET aura = ? WHERE user_id = ?", 
+                (new_amount, user_id)
+            )
+            await db.commit()
+
+    async def ensure_users(self, *members):
+        for m in members:
+            await add_user(m)
+
+    # ===================================================
+    # Main aura modifying logic
+    # ===================================================
+
     @commands.command(name="aura")
     async def aura(self, ctx, amount: int, member: discord.Member):
-        """Give or take aura points from a user. Usage: !aura <+/-amount> @user"""
+        """
+        !aura <+/-amount> @user
+        Give or take aura.
+        """
         giver_id = str(ctx.author.id)
         receiver_id = str(member.id)
 
         if giver_id == receiver_id:
-            return await ctx.send("❌ You cannot give or take aura to yourself!")
+            return await ctx.send("❌ You cannot modify aura with yourself.")
 
-        # Ensure both users exist in DB
-        await add_user(giver_id)
-        await add_user(receiver_id)
+        await self.ensure_users(giver_id, receiver_id)
 
-        giver = await get_user(giver_id)
-        receiver = await get_user(receiver_id)
+        giver_data = await get_user(giver_id)
+        receiver_data = await get_user(receiver_id)
 
-        if giver is None or receiver is None:
-            return await ctx.send("❌ One of the users is not found in the database!")
+        if giver_data is None or receiver_data is None:
+            return await ctx.send("❌ Failed to find users in database.")
 
-        _, _, giver_level, _, _, aura_pool = giver
-        _, _, _, _, receiver_aura, _ = receiver
+        giver_aura = giver_data[4]
+        receiver_aura = receiver_data[4]
 
-        if amount > 0:  # Giving aura
-            if amount > aura_pool:
-                return await ctx.send(f"❌ You do not have enough aura in your pool! You have {aura_pool}.")
-            new_aura_pool = aura_pool - amount
-            new_receiver_aura = receiver_aura + amount
-        else:  # Taking aura
-            amount = abs(amount)
-            if amount > 100:
-                amount = 100  # Max 100 aura can be taken
-            new_receiver_aura = max(receiver_aura - amount, 0)
-            new_aura_pool = aura_pool  # giver's pool doesn't change when taking aura
+        # ------------------ Giving Aura -------------------
+        if amount > 0:
+            if giver_aura < amount:
+                return await ctx.send(f"❌ You only have {giver_aura} aura.")
+            
+            giver_aura -= amount
+            receiver_aura += amount
+            verb = "gave"
 
-        # Update the database
-        async with aiosqlite.connect(DB_PATH) as db:
-            await db.execute("UPDATE users SET aura = ? WHERE user_id = ?", (new_receiver_aura, receiver_id))
-            await db.execute("UPDATE users SET aura_pool = ? WHERE user_id = ?", (new_aura_pool, giver_id))
-            await db.commit()
-
-        action = "gave" if amount > 0 else "took"
-        await ctx.send(f"✨ {ctx.author.mention} {action} {amount} aura {'to' if amount > 0 else 'from'} {member.mention}!")
-        logger.info(f"{ctx.author} {action} {amount} aura {'to' if amount > 0 else 'from'} {member}. Giver pool: {new_aura_pool}, Receiver aura: {new_receiver_aura}")
-
-    # Method to add aura on level up (to be called from update_user)
-    @staticmethod
-    async def award_levelup_aura(user_id: str, level: int):
-        if level <= 10:
-            aura_award = random.randint(1, 100)
-        elif 11 <= level <= 20:
-            aura_award = random.randint(101, 300)
-        elif 21 <= level <= 30:
-            aura_award = random.randint(301, 600)
+        # ---------------- Taking Aura ----------------------
         else:
-            aura_award = random.randint(601, 1000)
+            amount = abs(amount)
+
+            if receiver_aura < amount:
+                amount = receiver_aura  # steal max possible
+
+            giver_aura += amount
+            receiver_aura -= amount
+            verb = "took"
+
+        # ----------------- Update DB -----------------------
+        await self.set_aura(giver_id, giver_aura)
+        await self.set_aura(receiver_id, receiver_aura)
+
+        await ctx.send(
+            f"✨ {ctx.author.mention} **{verb} {amount} aura** "
+            f"{'to' if verb == 'gave' else 'from'} {member.mention}!"
+        )
+
+        logger.info(
+            f"[AURA ACTION] {ctx.author} {verb} {amount} aura {'to' if verb=='gave' else 'from'} {member}."
+            f"New aura giver={giver_aura}, receiver={receiver_aura}"
+        )
+
+    # ===================================================
+    # 🎯 Aura check command
+    # ===================================================
+    @commands.command(name="myAura")
+    async def my_aura(self, ctx):
+        await add_user(str(ctx.author.id))
+        aura = await self.get_aura(str(ctx.author.id))
+
+        embed = discord.Embed(
+            title=f"🌟 Aura Status for {ctx.author.name}",
+            color=0x00ffdd
+        )
+        embed.add_field(name="✨ Aura:", value=str(aura))
+        embed.set_thumbnail(url=ctx.author.avatar.url)
+
+        await ctx.send(embed=embed)
+
+    # ===================================================
+    # 🏆 Leaderboard
+    # ===================================================
+    @commands.command(name="auraTop")
+    async def aura_top(self, ctx):
+        async with aiosqlite.connect(DB_PATH) as db:
+            cursor = await db.execute(
+                "SELECT user_id, aura FROM users ORDER BY aura DESC LIMIT 10"
+            )
+            rows = await cursor.fetchall()
+
+        if not rows:
+            return await ctx.send("Nobody has aura yet 😭")
+
+        embed = discord.Embed(
+            title="🏆 Top Aura Users",
+            color=0xFFD700
+        )
+
+        for i, (uid, aura) in enumerate(rows, start=1):
+            member = ctx.guild.get_member(int(uid))
+            name = member.name if member else uid
+            embed.add_field(
+                name=f"{i}. {name}",
+                value=f"✨ {aura} aura",
+                inline=False
+            )
+
+        await ctx.send(embed=embed)
+
+    # ===================================================
+    # Aura random reward function (call from update_user)
+    # ===================================================
+    @staticmethod
+    async def award_levelup_aura(user_id: str, lvl: int):
+        reward = random.randint(10, 50)
 
         async with aiosqlite.connect(DB_PATH) as db:
-            cursor = await db.execute("SELECT aura_pool FROM users WHERE user_id = ?", (user_id,))
+            cursor = await db.execute(
+                "SELECT aura FROM users WHERE user_id = ?", 
+                (user_id,)
+            )
             row = await cursor.fetchone()
-            current_pool = row[0] if row else 0
-            new_pool = current_pool + aura_award
-            await db.execute("UPDATE users SET aura_pool = ? WHERE user_id = ?", (new_pool, user_id))
-            await db.commit()
-        logger.info(f"User {user_id} leveled up and received {aura_award} aura. New aura_pool: {new_pool}")
+            current = row[0] if row else 0
+            new = current + reward
 
+            await db.execute(
+                "UPDATE users SET aura = ? WHERE user_id = ?", 
+                (new, user_id)
+            )
+            await db.commit()
+
+        logger.info(
+            f"[LEVEL UP] User {user_id} gained {reward} aura. New total: {new}"
+        )
+
+
+# Required setup for discord.py extensions
 async def setup(bot):
     await bot.add_cog(Aura(bot))
-    logger.info("Aura cog loaded successfully")
+    logger.info("Aura cog fully loaded.")
