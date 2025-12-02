@@ -1,15 +1,13 @@
-import sqlite3
-import threading
+import aiosqlite
+import asyncio
 
 class Database:
     def __init__(self):
-        self.lock = threading.Lock()
-        self.conn = sqlite3.connect("merlin.db", check_same_thread=False)
-        self.cur = self.conn.cursor()
-        self.setup()
+        self.db = None
 
-    def setup(self):
-        self.cur.execute("""
+    async def connect(self):
+        self.db = await aiosqlite.connect("merlin.db")
+        await self.db.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 user_id TEXT PRIMARY KEY,
                 xp INTEGER DEFAULT 0,
@@ -18,25 +16,24 @@ class Database:
                 aura INTEGER DEFAULT 0
             )
         """)
-        self.conn.commit()
+        await self.db.commit()
 
-    def ensure_user(self, uid):
-        self.cur.execute("""
+    async def add_message(self, uid):
+        await self.db.execute("""
             INSERT OR IGNORE INTO users (user_id) VALUES (?)
         """, (uid,))
-        self.conn.commit()
 
-    def add_message(self, uid):
-        with self.lock:
-            self.ensure_user(uid)
-            self.cur.execute("""
-                UPDATE users SET messages = messages + 1, xp = xp + 5
-                WHERE user_id = ?
-            """, (uid,))
-            self.conn.commit()
+        await self.db.execute("""
+            UPDATE users SET messages = messages + 1, xp = xp + 5
+            WHERE user_id = ?
+        """, (uid,))
 
-    def get_user(self, uid):
-        self.cur.execute("SELECT * FROM users WHERE user_id = ?", (uid,))
-        return self.cur.fetchone()
+        await self.db.commit()
+
+    async def get_user(self, uid):
+        cursor = await self.db.execute(
+            "SELECT * FROM users WHERE user_id = ?", (uid,)
+        )
+        return await cursor.fetchone()
 
 db = Database()
