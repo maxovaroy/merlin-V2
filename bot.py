@@ -21,6 +21,11 @@ async def on_ready():
         logger.info("Cog 'profile' loaded successfully.")
     except Exception as e:
         logger.error(f"Failed to load cog 'profile': {e}")
+    try:
+        await bot.load_extension("cogs.aura")
+        logger.info("Cog 'aura' loaded successfully.")
+    except Exception as e:
+        logger.error(f"Failed to load cog 'aura': {e}")
 
 # Log command usage
 @bot.event
