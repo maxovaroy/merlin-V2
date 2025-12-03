@@ -55,6 +55,10 @@ SKINS: Dict[str, Dict[str, object]] = {
         "price": 36.95, "image_url": "https://i.postimg.cc/PJNmWnTN/1000240569.png",
         "rarity": "Nameless", "category": "Case",
     },
+    "Syndicate WEAPON CRATE": {
+        "price": 11.50, "image_url": "https://i.postimg.cc/N0CgV3RJ/1000240576.png",
+        "rarity": "Common", "category": "Case",
+    },
 }
 
 # ---------------------------
