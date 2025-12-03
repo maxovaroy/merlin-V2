@@ -6,7 +6,7 @@ Fully featured manual market cog for Standoff 2.
 
 Commands:
   Prefix:
-    !price <skin>        - Show single skin
+    !price <skin>        - Show single skin (or open dropdown if no argument)
     !listskins [page]    - Paginated list of skins
     !skins [page]        - Alias for !listskins
     !findskin <term>     - Search skins
@@ -184,6 +184,31 @@ class MarketPaginator(discord.ui.View):
         self.index = len(self.pages) - 1
         await self._update(interaction)
 
+# ==========================
+# UPDATED PRICE SELECT (Dropdown)
+# ==========================
+class SkinSelect(discord.ui.Select):
+    def __init__(self):
+        options = [
+            discord.SelectOption(label=name, description=f"{SKINS[name]['rarity']} • {SKINS[name]['category']}")
+            for name in list(SKINS.keys())[:25]  # keep to 25 to avoid hitting Discord limit
+        ]
+        super().__init__(
+            placeholder="Select a skin to view price...",
+            min_values=1,
+            max_values=1,
+            options=options
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        skin_name = self.values[0]
+        await interaction.response.edit_message(embed=build_price_embed(skin_name), view=None)
+
+class SkinSelectView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=120)
+        self.add_item(SkinSelect())
+
 # ---------------------------
 # Cog
 # ---------------------------
@@ -196,7 +221,17 @@ class SO2MarketCog(commands.Cog):
     # Prefix commands
     # -----------------------
     @commands.command(name="price")
-    async def price_cmd(self, ctx: commands.Context, *, name: str):
+    async def price_cmd(self, ctx: commands.Context, *, name: str = None):
+        """
+        If no name is provided, open a dropdown menu for selection.
+        If a name is provided, search and display the skin's embed.
+        """
+        # dropdown mode
+        if not name:
+            # send the interactive select view
+            return await ctx.send("🎯 Select a skin below:", view=SkinSelectView())
+
+        # normal search mode (exact or partial)
         key = find_skin_by_name(name)
         if not key:
             matches = find_partial_matches(name, limit=6)
@@ -204,6 +239,7 @@ class SO2MarketCog(commands.Cog):
                 return await ctx.send(f"❌ No skin found matching `{name}`")
             lines = [f"- {m} ({SKINS[m]['price']} coins)" for m in matches]
             return await ctx.send(f"❌ Did you mean:\n" + "\n".join(lines))
+
         await ctx.send(embed=build_price_embed(key))
 
     @commands.command(name="listskins", aliases=["skins"])
@@ -300,52 +336,6 @@ class SO2MarketCog(commands.Cog):
     async def setprice_autocomplete(self, interaction: discord.Interaction, current: str):
         choices = [app_commands.Choice(name=k, value=k) for k in SKINS.keys() if current.lower() in k.lower()]
         return choices[:20]
-
-# ==========================
-# UPDATED PRICE COMMAND
-# ==========================
-
-class SkinSelect(discord.ui.Select):
-    def __init__(self):
-        options = [
-            discord.SelectOption(label=name, description=f"{SKINS[name]['rarity']} • {SKINS[name]['category']}")
-            for name in list(SKINS.keys())[:25]  # (limit 25 prevent error)
-        ]
-        super().__init__(
-            placeholder="Select a skin to view price...",
-            min_values=1,
-            max_values=1,
-            options=options
-        )
-
-    async def callback(self, interaction: discord.Interaction):
-        skin_name = self.values[0]
-        await interaction.response.edit_message(embed=build_price_embed(skin_name), view=None)
-
-
-class SkinSelectView(discord.ui.View):
-    def __init__(self):
-        super().__init__(timeout=120)
-        self.add_item(SkinSelect())
-
-
-@commands.command(name="price")
-async def price_cmd(self, ctx: commands.Context, *, name: str = None):
-    # If no skin name — open dropdown menu
-    if not name:
-        return await ctx.send("🎯 Select a skin below:", view=SkinSelectView())
-
-    # Normal search mode
-    key = find_skin_by_name(name)
-    if not key:
-        matches = find_partial_matches(name, limit=6)
-        if not matches:
-            return await ctx.send(f"❌ No skin found matching `{name}`")
-        lines = [f"- {m} ({SKINS[m]['price']} coins)" for m in matches]
-        return await ctx.send(f"❌ Did you mean:\n" + "\n".join(lines))
-
-    await ctx.send(embed=build_price_embed(key))
-
 
 # ---------------------------
 # Setup
