@@ -34,25 +34,26 @@ SKINS_PER_PAGE = 6
 _IMAGE_RE = re.compile(r"^https?://.*\.(?:png|jpg|jpeg|webp|gif)$", re.IGNORECASE)
 
 SKINS: Dict[str, Dict[str, object]] = {
-    "Oni Naginata": {
-        "price": 950, "image_url": "https://i.imgur.com/abcd123.png",
-        "rarity": "Legendary", "category": "Melee",
+
+    "Cosmo STREAM CRATE": {
+        "price": 44.00, "image_url": "https://i.postimg.cc/7LDZv1Cf/1000240574.png",
+        "rarity": "Common", "category": "Case",
     },
-    "AKR12 Railgun": {
-        "price": 1200, "image_url": "https://i.imgur.com/xyzrail.png",
-        "rarity": "Mythical", "category": "Rifle",
+    "PawPaw STREAM CRATE": {
+        "price": 17.92, "image_url": "https://i.postimg.cc/nMbt4ZBT/1000240575.png",
+        "rarity": "Common", "category": "Case",
     },
-    "Desert Eagle Thunder": {
-        "price": 430, "image_url": "https://i.imgur.com/deagthun.png",
-        "rarity": "Rare", "category": "Pistol",
+    "Ultimate 8 YEAR GIFT CASE": {
+        "price": 2479.97, "image_url": "https://i.postimg.cc/x89CKvQC/1000240567.png",
+        "rarity": "Nameless", "category": "Case",
     },
-    "SM1014 Frostbite": {
-        "price": 620, "image_url": "https://i.imgur.com/frostbite.png",
-        "rarity": "Epic", "category": "Shotgun",
+    "Prime 8 YEAR GIFT CASE": {
+        "price": 69.99, "image_url": "https://i.postimg.cc/rF399sdd/1000240568.png",
+        "rarity": "Nameless", "category": "Case",
     },
-    "P90 Neon Rage": {
-        "price": 310, "image_url": "https://i.imgur.com/p90neon.png",
-        "rarity": "Uncommon", "category": "SMG",
+    "Great 8 YEAR GIFT CASE": {
+        "price": 36.95, "image_url": "https://i.postimg.cc/PJNmWnTN/1000240569.png",
+        "rarity": "Nameless", "category": "Case",
     },
 }
 
@@ -86,18 +87,18 @@ def build_price_embed(skin_name: str) -> discord.Embed:
         "rare": 0x3498DB,
         "epic": 0x9B59B6,
         "legendary": 0xE67E22,
-        "mythical": 0xE74C3C,
+        "nameless": 0xffac21,
     }
     color = rarity_colors.get(rarity.lower(), 0x5865F2)
 
     embed = discord.Embed(
         title=f"{skin_name}",
-        description=f"🟡 **Price:** `{price}` coins\n⭐ **Rarity:** `{rarity}`\n📦 **Category:** `{category}`",
+        description=f"🟡 **Price:** `{price}` gold\n⭐ **Rarity:** `{rarity}`\n📦 **Category:** `{category}`",
         color=color,
     )
     if image:
         embed.set_image(url=image)
-    embed.set_footer(text="Standoff 2 • Manual Market • Edit cogs/so2_market.py to change data")
+    embed.set_footer(text="Standoff 2 • Skin Prices NOTE: Skins prices gets updated everyday its not automatic and does not show real time price")
     return embed
 
 def build_list_page_embed(page_items: List[Tuple[str, Dict]], page: int, total_pages: int) -> discord.Embed:
