@@ -9,7 +9,7 @@ Includes debug commands for testing.
 import discord
 from discord.ext import commands
 from database import add_user, get_user, update_user
-import asyncio
+import aiosqlite
 import logging
 
 # ---------------- CONFIG ----------------
@@ -31,6 +31,7 @@ logger.setLevel(logging.INFO)
 class InviteTracker(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
+        import asyncio
         self._db_lock = asyncio.Lock()
         logger.info("InviteTracker Cog Loaded.")
 
