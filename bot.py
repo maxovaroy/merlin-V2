@@ -78,7 +78,7 @@ async def on_message(message):
         return
 
     if message.guild:
-        level_cog = bot.get_cog("LevelCog")
+        level_cog = bot.get_cog("LevelSystem")
         if level_cog:
             try:
                 await level_cog.add_xp(
