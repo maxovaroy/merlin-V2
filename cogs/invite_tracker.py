@@ -9,7 +9,7 @@ Includes debug commands for testing.
 import discord
 from discord.ext import commands
 from database import add_user, get_user, update_user
-import aiosqlite
+import asyncio
 import logging
 
 # ---------------- CONFIG ----------------
