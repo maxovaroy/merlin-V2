@@ -1,37 +1,5 @@
 # cogs/level.py
 """
-Level System Cog for Merlin Royz (Rewritten - Full, Documented, 300+ lines)
-Author: ChatGPT (for max_5037)
-Version: 1.0
------------------------------------------------------------------------
-Overview / Purpose
------------------------------------------------------------------------
-This cog implements a complete leveling system integrated with your
-existing `database.py` helpers (if present). It awards XP for messages,
-keeps cooldowns, detects level-ups, and posts a single embed message that
-contains a single fixed GIF (no random GIFs). All existing admin commands
-and utilities (setxp, setlevel, synclevels, exportcsv, leaderboard, debug)
-are included and preserved.
-
-The file is intentionally verbose and heavily commented (# GUIDE) so you
-can easily follow, maintain, and modify behavior later.
-
-Key points:
-- Uses database.add_user, database.update_user, database.get_user when available.
-- Falls back to direct sqlite queries if DB helpers are not importable.
-- Uses the same leveling math as your database's update_user (sqrt-based) via
-  db_level_from_xp() so levels remain consistent.
-- Single fixed GIF (set LEVEL_UP_GIF) used in the embed's main image.
-- No sounds, no animations, no random GIF lists.
-- Includes an improved profile embed (feature #2) and file-wide guides (feature #10).
------------------------------------------------------------------------
-USAGE
------------------------------------------------------------------------
-Place this file at: cogs/level.py
-Load with:
-    await bot.load_extension("cogs.level")
-or ensure setup() is called by your bot loader.
-
 Commands:
   - lvlup (admin)     : instantly increase levels for a member
   - lvlup_test        : self-test level up for author
