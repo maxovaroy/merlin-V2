@@ -3,6 +3,7 @@
 Invite Tracker Cog for Merlin Realm Royz
 ----------------------------------------
 Tracks invites per user, handles resets, logs joins/leaves, and provides stats.
+Includes debug commands for testing.
 """
 
 import discord
@@ -51,6 +52,7 @@ class InviteTracker(commands.Cog):
         """Ensure the user exists in invites table."""
         try:
             async with aiosqlite.connect(DATABASE_PATH) as db:
+                await db.execute("CREATE TABLE IF NOT EXISTS invites(user_id TEXT PRIMARY KEY, invites INTEGER DEFAULT 0)")
                 await db.execute("INSERT OR IGNORE INTO invites(user_id, invites) VALUES(?,0)", (user_id,))
                 await db.commit()
         except Exception as e:
@@ -85,16 +87,6 @@ class InviteTracker(commands.Cog):
         if channel:
             await channel.send(f"🎉 {member.mention} joined the server!")
 
-        # Increment inviter invites if possible
-        # Requires that the bot has Manage Guild and can fetch invites
-        try:
-            invites_before = await member.guild.invites()
-            for inv in invites_before:
-                if inv.uses > inv.uses:
-                    await self._add_invites(str(inv.inviter.id), 1)
-        except Exception:
-            pass
-
     @commands.Cog.listener()
     async def on_member_remove(self, member: discord.Member):
         """When someone leaves the server."""
@@ -124,6 +116,26 @@ class InviteTracker(commands.Cog):
                 await db.execute("UPDATE invites SET invites=0")
                 await db.commit()
             await ctx.send("✅ Reset invites for all users.")
+
+    # ---------------- DEBUG COMMAND ----------------
+    @commands.command(name="invitedebug")
+    @commands.is_owner()
+    async def invitedebug(self, ctx: commands.Context, member: discord.Member = None):
+        """Show full debug info of invites for a member or all users."""
+        if member:
+            invites_count = await self._get_invites(str(member.id))
+            await ctx.send(f"🔍 Debug — {member.display_name} has {invites_count} invites.")
+        else:
+            rows = await self._raw_db_execute("SELECT user_id, invites FROM invites ORDER BY invites DESC")
+            desc = ""
+            for r in rows:
+                uid = int(r["user_id"])
+                m = ctx.guild.get_member(uid)
+                name = m.display_name if m else f"User {uid}"
+                desc += f"{name}: {r['invites']} invites\n"
+            if not desc:
+                desc = "No invite data found."
+            await ctx.send(f"📄 **All invite data:**\n{desc}")
 
     # ---------------- LIFECYCLE ----------------
     async def cog_load(self):
