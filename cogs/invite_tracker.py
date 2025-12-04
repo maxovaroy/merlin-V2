@@ -31,7 +31,7 @@ logger.setLevel(logging.INFO)
 class InviteTracker(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        self._db_lock = aiosqlite.Lock()
+        self._db_lock = asyncio.Lock()
         logger.info("InviteTracker Cog Loaded.")
 
     # ---------------- HELPER FUNCTIONS ----------------
