@@ -38,6 +38,11 @@ ALLOWED_ROLE_IDS = {1259587539212173375, 1401443966011969686, 120543183773290090
 SKINS_PER_PAGE = 6
 _IMAGE_RE = re.compile(r"^https?://.*\.(?:png|jpg|jpeg|webp|gif)$", re.IGNORECASE)
 
+# ============================
+# Currency Emoji
+# ============================
+GOLD = "<:gold:1445844021242232984>"
+
 SKINS: Dict[str, Dict[str, object]] = {
     "Cosmo STREAM CRATE": {
         "price": 44.00, "image_url": "https://i.postimg.cc/7LDZv1Cf/1000240574.png",
@@ -60,7 +65,23 @@ SKINS: Dict[str, Dict[str, object]] = {
         "rarity": "Nameless", "category": "Case",
     },
     "Syndicate WEAPON CRATE": {
-        "price": 11.50, "image_url": "https://i.postimg.cc/N0CgV3RJ/1000240576.png",
+        "price": 12.30, "image_url": "https://i.postimg.cc/N0CgV3RJ/1000240576.png",
+        "rarity": "Common", "category": "Case",
+    },
+    "Prey WEAPON BOX": {
+        "price": 18.36, "image_url": "https://i.postimg.cc/5yWpsvCg/1000240595.png",
+        "rarity": "Common", "category": "Case",
+    },
+    "Gambit WEAPON BOX": {
+        "price": 27.00, "image_url": "https://i.postimg.cc/nzGQtQWj/1000240596.png",
+        "rarity": "Common", "category": "Case",
+    },
+    "Nightmare WEAPON BOX": {
+        "price": 39.00, "image_url": "https://i.postimg.cc/4dVQHdSh/1000240597.png",
+        "rarity": "Common", "category": "Case",
+    },
+    "Kitsune Dreams WEAPON BOX": {
+        "price": 38.00, "image_url": "https://i.postimg.cc/XqZ3kR94/1000240598.png",
         "rarity": "Common", "category": "Case",
     },
 }
@@ -99,9 +120,10 @@ def build_price_embed(skin_name: str) -> discord.Embed:
     }
     color = rarity_colors.get(rarity.lower(), 0x5865F2)
 
+    # use f-string correctly and show GOLD emoji
     embed = discord.Embed(
         title=f"{skin_name}",
-        description=f"🟡 **Price:** `{price}` gold\n⭐ **Rarity:** `{rarity}`\n📦 **Category:** `{category}`",
+        description=f"🟡 **Price:** `{price} {GOLD}`\n⭐ **Rarity:** `{rarity}`\n📦 **Category:** `{category}`",
         color=color,
     )
     if image:
@@ -118,7 +140,7 @@ def build_list_page_embed(page_items: List[Tuple[str, Dict]], page: int, total_p
     for name, data in page_items:
         embed.add_field(
             name=name,
-            value=f"💰 {data.get('price',0)} • ⭐ {data.get('rarity','Unknown')} • 📦 {data.get('category','Misc')}",
+            value=f"💰 {data.get('price',0)} {GOLD} • ⭐ {data.get('rarity','Unknown')} • 📦 {data.get('category','Misc')}",
             inline=False
         )
     embed.set_footer(text="Use buttons or /listskins <page> to navigate")
@@ -234,7 +256,7 @@ class SO2MarketCog(commands.Cog):
             matches = find_partial_matches(name, limit=6)
             if not matches:
                 return await ctx.send(f"❌ No skin found matching `{name}`")
-            lines = [f"- {m} ({SKINS[m]['price']} coins)" for m in matches]
+            lines = [f"- {m} ({SKINS[m]['price']} {GOLD})" for m in matches]
             return await ctx.send(f"❌ Did you mean:\n" + "\n".join(lines))
         await ctx.send(embed=build_price_embed(key))
 
@@ -253,7 +275,7 @@ class SO2MarketCog(commands.Cog):
         matches = find_partial_matches(query, limit=20)
         if not matches:
             return await ctx.send(f"❌ No skins matching `{query}`")
-        lines = [f"- **{m}** — {SKINS[m]['price']} coins • {SKINS[m]['rarity']}" for m in matches]
+        lines = [f"- **{m}** — {SKINS[m]['price']} {GOLD} • {SKINS[m]['rarity']}" for m in matches]
         await ctx.send("🔎 Matches:\n" + "\n".join(lines))
 
     @commands.command(name="setprice")
@@ -268,8 +290,8 @@ class SO2MarketCog(commands.Cog):
         self._sorted_items = sorted(SKINS.items(), key=lambda kv: kv[0].lower())
         embed = discord.Embed(title="✅ Price Updated", color=discord.Color.green())
         embed.add_field(name="Skin", value=key, inline=True)
-        embed.add_field(name="Old Price", value=str(old), inline=True)
-        embed.add_field(name="New Price", value=str(price), inline=True)
+        embed.add_field(name="Old Price", value=str(old) + f" {GOLD}", inline=True)
+        embed.add_field(name="New Price", value=str(price) + f" {GOLD}", inline=True)
         await ctx.send(embed=embed)
 
     # -----------------------
