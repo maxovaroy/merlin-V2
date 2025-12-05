@@ -57,6 +57,24 @@ SLANG_MAP = {
 
 FILLERS = ["ngl", "lol", "idk", "fr", "no cap", "ong", "btw", "lmao", "hmmm"]
 
+# === new style phrases for Sarcastic + Gen-Z mix ===
+SARCASM_PHRASES = [
+    "wow big brain move", "oh absolutely (not)", "legend behaviour", 
+    "ok genius", "amaze", "peak performance ngl"
+]
+
+GENZ_SHORTS = [
+    "ong", "fr", "no cap", "lowkey", "highkey", "bet", "say less", "slaps"
+]
+
+GENZ_RESPONSES_SHORT = [
+    "fr", "bet", "say less", "okok", "hmm", "ight", "go on", "mhm"
+]
+
+GENZ_QUESTION_RESPONSES = [
+    "good q ngl", "lemme think fr", "idk fr", "maybe? idk", "sus"
+]
+
 # Tone style presets
 TONE_MOOD = {
     "friendly": {"prefix": "", "suffix": "<:Eminem:1308041429339209778>"},
@@ -133,55 +151,61 @@ class Humanizer(commands.Cog):
         return "neutral"
 
     async def _generate_reply(self, msg):
-        content = msg.content.strip().lower()
+        # Work on a cleaned lowercase copy for decisions, but keep original for replies
+        raw = msg.content.strip()
+        content = raw.lower()
     
-        # ---------------- Natural Greeting Handling ----------------
+        # ---- GREETINGS (use short gen-z replies) ----
         if content in ["hi", "hello", "hey", "sup", "yo", "hii", "heyy"]:
-            greet_responses = [
-                f"yo {msg.author.display_name}",
-                f"hey {msg.author.display_name}",
-                f"sup {msg.author.display_name}",
-                f"wassup",
-                f"ayoo",
-                f"hey hey"
-            ]
-            return random.choice(greet_responses)
+            return random.choice([f"yo {msg.author.display_name}", "sup", "ayoo", "wassup", "hey"])
     
-        # ---------------- Short Fragment Replies ----------------
+        # ---- VERY SHORT / FRAGMENTED MESSAGES ----
+        # keep short, snappy, gen-z style or sarcastic micro-roasts
         if len(content.split()) <= 2:
-            short_replies = [
-                "fr", "ye", "okok", "bet", "say less", 
-                "hmm", "ight", "true", "lol", "wdym?", "go on"
-            ]
-            return random.choice(short_replies)
+            # small chance for sarcastic micro-roast if user is rude
+            if any(w in content for w in ["wtf", "shut", "stfu", "fuck", "madafaka", "baka"]) and random.random() < 0.35:
+                return random.choice(["ok calm down", "chill fr", random.choice(SARCASM_PHRASES)])
+            # otherwise gen-z short reply
+            return random.choice(GENZ_RESPONSES_SHORT + GENZ_SHORTS)
     
-        # ---------------- Questions ----------------
+        # ---- QUESTIONS ----
         if content.endswith("?"):
-            q_replies = [
-                "good q tbh", "hmm lemme think", "idk fr", 
-                "maybe..", "interesting ngl"
-            ]
-            return random.choice(q_replies)
+            # mix gen-z and sarcastic answers for questions
+            if random.random() < 0.35:
+                return random.choice(GENZ_QUESTION_RESPONSES)
+            else:
+                return random.choice(["hmm good q", "idk bro", "lemme think fr"])
     
-        # ---------------- Natural Slang Conversion ----------------
-        reply = self._apply_slang(msg.content)
+        # ---- Longer messages: apply slang and maybe memory ----
+        reply = self._apply_slang(raw)  # preserve original casing for flavor
     
-        # ---------------- Typos *only sometimes* ----------------
-        if random.random() < 0.15:
+        # Light typo/filler occasionally (but less for sarcasm)
+        if random.random() < 0.12:
             reply = self._typoify(reply)
     
-        # ---------------- Contextual Memory Use ----------------
+        # Reference past messages only if meaningful (3+ words)
         if USE_MEMORY and msg.author.id in self._memory and random.random() < 0.25:
             meaningful = [m for m in self._memory[msg.author.id] if len(m.split()) > 3]
             if meaningful:
                 past_msg = random.choice(meaningful)
-                reply += f" — remember when u said '{past_msg[:35]}...'?"
+                # Prefer a sarcastic callback sometimes
+                if random.random() < 0.4:
+                    reply += f" — lol remember when u said '{past_msg[:30]}...'?"
+                else:
+                    reply += f" — lowkey u said '{past_msg[:30]}...' before"
     
-        # Prevent direct parroting
-        if reply.lower() == content:
-            reply += random.choice([" fr", " lol", " i get u", " hmm", " interesting"])
+        # If the reply equals the message (avoid parroting), tweak it
+        if reply.strip().lower() == content:
+            # Add a sarcastic/gen-z tail
+            tail = random.choice(SARCASM_PHRASES + GENZ_SHORTS)
+            reply = f"{reply} {tail}"
+    
+        # Final small chance to add a micro-sarcastic opener (not always)
+        if random.random() < 0.08:
+            reply = random.choice(["ok real talk — ", "bruh — "]) + reply
     
         return reply
+
 
     # ---------------- Listener ----------------
 
