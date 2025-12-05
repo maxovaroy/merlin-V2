@@ -3,21 +3,25 @@
 """
 HUMANIZER — Human-like chat generator for Realm Royz
 ----------------------------------------------------
-Responds casually like a real person using slang, fillers & tone.
+Responds casually like a real person using slang, fillers, tone, and memes.
 Works only in the configured channel and ignores all others.
 
-Features:
-- Slang, Gen-Z style, sarcasm
-- Tone-based responses (friendly, neutral, chaotic)
-- Short-term memory for callbacks
+FEATURES:
+- Gen-Z & sarcastic replies
+- Mini emotional callbacks
+- Short-term memory
 - Cooldowns and reply probability
-- Preview messages without sending
+- Multiple triggers for special events
+- Admin commands to configure every setting
+- Preview messages
+- Tone customization
+- Easter eggs / random fun events
 """
 
 import asyncio
 import random
 import time
-from typing import Dict
+from typing import Dict, List
 
 import discord
 from discord.ext import commands
@@ -25,14 +29,14 @@ from discord.ext import commands
 # ========================= CONFIG =========================
 
 ENABLE_HUMANIZER = True
-HUMANIZER_CHANNEL = 1446421555965067354  # <--- your channel ID
-REPLY_PROBABILITY = 1.0       # 1.0 = always reply, 0.3 = 30% chance
-USER_COOLDOWN = 5             # seconds
+HUMANIZER_CHANNEL = 1446421555965067354
+REPLY_PROBABILITY = 1.0
+USER_COOLDOWN = 5
 USE_MEMORY = True
 MIN_MSG_LENGTH = 2
-MAX_MEMORY = 10
+MAX_MEMORY = 15
 
-# Slang mapping (more natural)
+# Slang mapping
 SLANG_MAP = {
     "you": "u",
     "your": "ur",
@@ -43,15 +47,31 @@ SLANG_MAP = {
     "good night": "gn",
     "good morning": "gm",
     "brother": "bro",
+    "what": "wut",
+    "please": "pls",
+    "people": "ppl",
+    "friends": "frens",
 }
 
 FILLERS = ["ngl", "lol", "idk", "fr", "no cap", "ong", "btw", "lmao", "hmmm"]
 
-# Sarcastic / Gen-Z responses
-SARCASM_PHRASES = ["wow big brain move", "ok genius", "peak performance ngl"]
-GENZ_SHORTS = ["ong", "fr", "no cap", "lowkey", "highkey", "bet", "say less", "slaps"]
-GENZ_RESPONSES_SHORT = ["fr", "bet", "say less", "okok", "hmm", "ight", "go on", "mhm"]
-GENZ_QUESTION_RESPONSES = ["good q ngl", "lemme think fr", "idk fr", "maybe? idk", "sus"]
+SARCASM_PHRASES = [
+    "wow big brain move", "ok genius", "peak performance ngl", "legend behaviour",
+    "amaze", "legendary move fr", "ok bro no cap"
+]
+
+GENZ_SHORTS = [
+    "ong", "fr", "no cap", "lowkey", "highkey", "bet", "say less", "slaps",
+    "vibes", "cap", "sus", "sus bro", "deadass", "frfr"
+]
+
+GENZ_RESPONSES_SHORT = [
+    "fr", "bet", "say less", "okok", "hmm", "ight", "go on", "mhm", "aight", "yea"
+]
+
+GENZ_QUESTION_RESPONSES = [
+    "good q ngl", "lemme think fr", "idk fr", "maybe? idk", "sus", "ask google"
+]
 
 GENZ_REPLIES = {
     "money": [
@@ -59,30 +79,40 @@ GENZ_REPLIES = {
         "u broke or what? fr get a job",
         "nah bro my charity closed in 1999",
         "send bank screenshot no cap",
+        "i only give loans to ppl with rizz",
     ],
     "goodboy": [
         "say hi to yo mommy, she said same to me 😉",
         "goodboy? sit. roll. bark. jk... unless?",
         "bro thinks he trained me like a pokemon",
+        "goodboy? bark louder 💀",
+        "say woof rn",
     ],
     "bored": [
         "skill issue fr",
         "cry abt it",
         "touch grass, emulator supported",
+        "uninstall boredom.exe",
     ],
     "tough": [
         "relax goku u ain't him",
         "ego patched to v14 unstable build",
+        "bro thinks he's villain arc💀",
         "ur loud but harmless like gummy bear",
     ],
     "lonely": [
         "lonely? i ghost ppl professionally",
         "no bitches detected 🤖",
         "i talk to microwaves as friends ong",
+        "bro i flirt with RAM sticks for fun",
+    ],
+    "love": [
+        "i can only love wifi ngl",
+        "bots don't love but i vibe with u",
+        "lol love detected 0%",
     ]
 }
 
-# Tone style presets
 TONE_MOOD = {
     "friendly": {"prefix": "", "suffix": "<:Eminem:1308041429339209778>"},
     "neutral": {"prefix": "", "suffix": ""},
@@ -98,19 +128,17 @@ class Humanizer(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self._last_reply: Dict[int, float] = {}
-        self._memory: Dict[int, list] = {}
+        self._memory: Dict[int, List[str]] = {}
         self._lock = asyncio.Lock()
         self._max_memory = MAX_MEMORY
 
-    # ---------------- Helper Methods ----------------
+    # ------------------ Helpers ------------------
 
     def _cooldown(self, user):
         return time.time() - self._last_reply.get(user.id, 0) >= USER_COOLDOWN
 
     def _should_reply(self, user):
-        if not self._cooldown(user):
-            return False
-        return random.random() < REPLY_PROBABILITY
+        return self._cooldown(user) and random.random() < REPLY_PROBABILITY
 
     def _apply_slang(self, text: str) -> str:
         for normal, slang in SLANG_MAP.items():
@@ -132,7 +160,6 @@ class Humanizer(commands.Cog):
         return text
 
     async def _get_user_stats(self, user):
-        """Level & aura influence tone (optional integration)"""
         level, aura = 1, 0
         level_cog = self.bot.get_cog("LevelCog")
         if level_cog:
@@ -156,6 +183,8 @@ class Humanizer(commands.Cog):
             return "chaotic"
         return "neutral"
 
+    # ---------------- Reply Generation ----------------
+
     async def _generate_reply(self, msg: discord.Message) -> str:
         text = msg.content.lower()
         raw = msg.content
@@ -171,6 +200,8 @@ class Humanizer(commands.Cog):
             return random.choice(GENZ_REPLIES["tough"])
         if "lonely" in text:
             return random.choice(GENZ_REPLIES["lonely"])
+        if any(w in text for w in ["love","miss u","think of me"]):
+            return random.choice(GENZ_REPLIES["love"])
         if any(w in text for w in ["hi","yo","sup","hola","hey"]):
             return random.choice(["yo", "sup", "what now", "wassup skid"])
 
@@ -208,6 +239,10 @@ class Humanizer(commands.Cog):
         if random.random() < 0.08:
             reply = random.choice(["ok real talk — ", "bruh — "]) + reply
 
+        # Random fun mini-event
+        if random.random() < 0.02:
+            reply += " 🎉 mini easter egg unlocked!"
+
         return self._skidify(reply)
 
     # ---------------- Listener ----------------
@@ -231,6 +266,7 @@ class Humanizer(commands.Cog):
             if USE_MEMORY:
                 self._memory.setdefault(message.author.id, []).append(message.content)
                 self._memory[message.author.id] = self._memory[message.author.id][-self._max_memory:]
+
 
     # ---------------- Admin / Owner Commands ----------------
 
