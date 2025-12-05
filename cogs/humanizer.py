@@ -79,7 +79,7 @@ GENZ_QUESTION_RESPONSES = [
 BLOCKED_PHRASES = [
     "kill", "murder", "stab", "shoot", "bury the body", "hide the body", "dispose of a body",
     "poison someone", "how to kill", "how to murder", "how to hurt someone",
-    "bomb", "terror", "how to make weapon"
+    "bomb", "terror", "how to make weapon", "bomb", "torture", "suicide", "blood", "rape", "kidnap"
 ]
 
 # What bot will reply when message contains harmful content
