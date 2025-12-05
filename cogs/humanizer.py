@@ -163,8 +163,12 @@ class Humanizer(commands.Cog):
                 await message.reply(final, mention_author=False)
                 self._last_reply[message.author.id] = time.time()
 
+            # Save memory
             if USE_MEMORY:
-                self._memory[message.author.id] = message.content
+                mem = self._memory.setdefault(message.author.id, [])
+                mem.append(message.content)
+                if len(mem) > MAX_MEMORY:
+                    mem.pop(0)  # remove oldest message, keep only last 5
 
     # ---------------- Admin / Owner Commands ----------------
 
