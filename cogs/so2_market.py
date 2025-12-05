@@ -45,39 +45,39 @@ GOLD = "<:gold:1445844021242232984>"
 
 SKINS: Dict[str, Dict[str, object]] = {
     "Cosmo STREAM CRATE": {
-        "price": 44.00, "image_url": "https://i.postimg.cc/7LDZv1Cf/1000240574.png",
+        "price": 42.00, "image_url": "https://i.postimg.cc/7LDZv1Cf/1000240574.png",
         "rarity": "Common", "category": "Case",
     },
     "PawPaw STREAM CRATE": {
-        "price": 17.92, "image_url": "https://i.postimg.cc/nMbt4ZBT/1000240575.png",
+        "price": 22.40, "image_url": "https://i.postimg.cc/nMbt4ZBT/1000240575.png",
         "rarity": "Common", "category": "Case",
     },
     "Ultimate 8 YEAR GIFT CASE": {
-        "price": 2479.97, "image_url": "https://i.postimg.cc/x89CKvQC/1000240567.png",
+        "price": 2466.00, "image_url": "https://i.postimg.cc/x89CKvQC/1000240567.png",
         "rarity": "Nameless", "category": "Case",
     },
     "Prime 8 YEAR GIFT CASE": {
-        "price": 69.99, "image_url": "https://i.postimg.cc/rF399sdd/1000240568.png",
+        "price": 73.99, "image_url": "https://i.postimg.cc/rF399sdd/1000240568.png",
         "rarity": "Nameless", "category": "Case",
     },
     "Great 8 YEAR GIFT CASE": {
-        "price": 36.95, "image_url": "https://i.postimg.cc/PJNmWnTN/1000240569.png",
+        "price": 36.39, "image_url": "https://i.postimg.cc/PJNmWnTN/1000240569.png",
         "rarity": "Nameless", "category": "Case",
     },
     "Syndicate WEAPON CRATE": {
-        "price": 12.30, "image_url": "https://i.postimg.cc/N0CgV3RJ/1000240576.png",
+        "price": 12.38, "image_url": "https://i.postimg.cc/N0CgV3RJ/1000240576.png",
         "rarity": "Common", "category": "Case",
     },
     "Prey WEAPON BOX": {
-        "price": 18.36, "image_url": "https://i.postimg.cc/5yWpsvCg/1000240595.png",
+        "price": 18.38, "image_url": "https://i.postimg.cc/5yWpsvCg/1000240595.png",
         "rarity": "Common", "category": "Case",
     },
     "Gambit WEAPON BOX": {
-        "price": 27.00, "image_url": "https://i.postimg.cc/nzGQtQWj/1000240596.png",
+        "price": 29.54, "image_url": "https://i.postimg.cc/nzGQtQWj/1000240596.png",
         "rarity": "Common", "category": "Case",
     },
     "Nightmare WEAPON BOX": {
-        "price": 39.00, "image_url": "https://i.postimg.cc/4dVQHdSh/1000240597.png",
+        "price": 39.92, "image_url": "https://i.postimg.cc/4dVQHdSh/1000240597.png",
         "rarity": "Common", "category": "Case",
     },
     "Kitsune Dreams WEAPON BOX": {
