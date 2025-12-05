@@ -147,8 +147,9 @@ class Humanizer(commands.Cog):
         if level >= MIN_LEVEL_FOR_FRIENDLY or aura > 1000:
             return "friendly"
         if level <= 2:
-            return "chaotic"
+            return "chaotic"   # chaotic will lean sarcastic in replies via the lists above
         return "neutral"
+
 
     async def _generate_reply(self, msg):
         # Work on a cleaned lowercase copy for decisions, but keep original for replies
