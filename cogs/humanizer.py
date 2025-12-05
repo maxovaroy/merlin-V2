@@ -74,6 +74,23 @@ GENZ_QUESTION_RESPONSES = [
     "good q ngl", "lemme think fr", "idk fr", "maybe? idk", "sus", "ask google"
 ]
 
+# ---------------- SAFETY FILTER CONFIG ----------------
+# List of harmful topics the bot will not respond to normally
+BLOCKED_PHRASES = [
+    "kill", "murder", "stab", "shoot", "bury the body", "hide the body", "dispose of a body",
+    "poison someone", "how to kill", "how to murder", "how to hurt someone",
+    "bomb", "terror", "how to make weapon"
+]
+
+# What bot will reply when message contains harmful content
+BLOCKED_RESPONSE = [
+    "Can't help with that my boy.",
+    "nah g that's wild 💀 not answering that.",
+    "bro what 💀 no.",
+    "ayo chill, can't answer that.",
+    "that's illegal af, pass."
+]
+
 GENZ_REPLIES = {
     "money": [
         "first show me your gay certificate 💀",
@@ -287,6 +304,16 @@ class Humanizer(commands.Cog):
         if not self._cooldown(message.author): return
         if random.random() > REPLY_PROBABILITY: return
 
+        # ------ Safety Message Filter ------
+        content_lower = message.content.lower()
+
+        for phrase in BLOCKED_PHRASES:
+            if phrase in content_lower:
+                reply = random.choice(BLOCKED_RESPONSE)
+                await message.channel.send(reply)
+                return  # stop further processing
+
+        
         async with self._lock:
             reply = await self._generate_reply(message)
             if reply:
