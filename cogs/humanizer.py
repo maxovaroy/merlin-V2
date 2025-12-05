@@ -159,7 +159,19 @@ class Humanizer(commands.Cog):
         # ---- GREETINGS (use short gen-z replies) ----
         if content in ["hi", "hello", "hey", "sup", "yo", "hii", "heyy"]:
             return random.choice([f"yo {msg.author.display_name}", "sup", "ayoo", "wassup", "hey"])
-    
+
+        # ---------------- Personal / Emotional Questions ----------------
+        if any(word in content for word in ["lonely", "alone", "sad", "love u", "miss u", "think of me"]):
+            emotional_replies = [
+                "lonely? nah, i got u here chatting rn",
+                "sometimes ig, but convos like this make it better ngl",
+                "who knows, maybe a lil… but i manage 😅",
+                "bruh i'm a bot, my only emotion is lag",
+                "lonely? only when nobody tags me fr",
+                "nope, i vibe. u lonely tho?"
+            ]
+            return random.choice(emotional_replies)
+
         # ---- VERY SHORT / FRAGMENTED MESSAGES ----
         # keep short, snappy, gen-z style or sarcastic micro-roasts
         if len(content.split()) <= 2:
