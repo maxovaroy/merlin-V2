@@ -133,37 +133,55 @@ class Humanizer(commands.Cog):
         return "neutral"
 
     async def _generate_reply(self, msg):
-        content = msg.content.strip()
+        content = msg.content.strip().lower()
     
-        # Apply slang naturally
-        reply = self._apply_slang(content)
+        # ---------------- Natural Greeting Handling ----------------
+        if content in ["hi", "hello", "hey", "sup", "yo", "hii", "heyy"]:
+            greet_responses = [
+                f"yo {msg.author.display_name}",
+                f"hey {msg.author.display_name}",
+                f"sup {msg.author.display_name}",
+                f"wassup",
+                f"ayoo",
+                f"hey hey"
+            ]
+            return random.choice(greet_responses)
     
-        # Short fragmented messages get short replies
+        # ---------------- Short Fragment Replies ----------------
         if len(content.split()) <= 2:
-            short_replies = ["k", "ok", "yea", "lol", "ngl", "fr", "hmm"]
+            short_replies = [
+                "fr", "ye", "okok", "bet", "say less", 
+                "hmm", "ight", "true", "lol", "wdym?", "go on"
+            ]
             return random.choice(short_replies)
     
-        # Greeting handling
-        if any(greet in content.lower() for greet in ["hi", "hello", "hey"]):
-            return f"hey {msg.author.display_name}"
-    
-        # Question handling
+        # ---------------- Questions ----------------
         if content.endswith("?"):
-            return random.choice(["hmm good q", "idk fr", "lemme think abt that"])
+            q_replies = [
+                "good q tbh", "hmm lemme think", "idk fr", 
+                "maybe..", "interesting ngl"
+            ]
+            return random.choice(q_replies)
     
-        # Add typo/filler randomness lightly
-        if random.random() < 0.2:
+        # ---------------- Natural Slang Conversion ----------------
+        reply = self._apply_slang(msg.content)
+    
+        # ---------------- Typos *only sometimes* ----------------
+        if random.random() < 0.15:
             reply = self._typoify(reply)
     
-        # Reference past messages only if meaningful (3+ words)
-        if USE_MEMORY and msg.author.id in self._memory and random.random() < 0.3:
-            past_candidates = [m for m in self._memory[msg.author.id] if len(m.split()) > 3]
-            if past_candidates:
-                past = random.choice(past_candidates)
-                reply += f" (btw u said: '{past[:30]}...')"
+        # ---------------- Contextual Memory Use ----------------
+        if USE_MEMORY and msg.author.id in self._memory and random.random() < 0.25:
+            meaningful = [m for m in self._memory[msg.author.id] if len(m.split()) > 3]
+            if meaningful:
+                past_msg = random.choice(meaningful)
+                reply += f" — remember when u said '{past_msg[:35]}...'?"
+    
+        # Prevent direct parroting
+        if reply.lower() == content:
+            reply += random.choice([" fr", " lol", " i get u", " hmm", " interesting"])
     
         return reply
-
 
     # ---------------- Listener ----------------
 
