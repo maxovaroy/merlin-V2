@@ -134,25 +134,36 @@ class Humanizer(commands.Cog):
 
     async def _generate_reply(self, msg):
         content = msg.content.strip()
-
+    
+        # Apply slang naturally
         reply = self._apply_slang(content)
-
+    
+        # Short fragmented messages get short replies
+        if len(content.split()) <= 2:
+            short_replies = ["k", "ok", "yea", "lol", "ngl", "fr", "hmm"]
+            return random.choice(short_replies)
+    
+        # Greeting handling
         if any(greet in content.lower() for greet in ["hi", "hello", "hey"]):
             return f"hey {msg.author.display_name}"
-
+    
+        # Question handling
         if content.endswith("?"):
-            return random.choice(["hmm good q 🤔", "idk fr", "lemme think abt that"])
-
-        # Add typo/filler randomness
-        if random.random() < 0.4:
+            return random.choice(["hmm good q", "idk fr", "lemme think abt that"])
+    
+        # Add typo/filler randomness lightly
+        if random.random() < 0.2:
             reply = self._typoify(reply)
-
-        # Refer to past messages randomly
-        if USE_MEMORY and message.author.id in self._memory and random.random() < 0.3:
-            past = random.choice(self._memory[message.author.id])
-            reply += f" (btw u said: '{past[:30]}...')"
-
+    
+        # Reference past messages only if meaningful (3+ words)
+        if USE_MEMORY and msg.author.id in self._memory and random.random() < 0.3:
+            past_candidates = [m for m in self._memory[msg.author.id] if len(m.split()) > 3]
+            if past_candidates:
+                past = random.choice(past_candidates)
+                reply += f" (btw u said: '{past[:30]}...')"
+    
         return reply
+
 
     # ---------------- Listener ----------------
 
