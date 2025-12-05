@@ -157,9 +157,22 @@ class Humanizer(commands.Cog):
         content = raw.lower()
     
         # ---- GREETINGS (use short gen-z replies) ----
-        if content in ["hi", "hello", "hey", "sup", "yo", "hii", "heyy"]:
-            return random.choice([f"yo {msg.author.display_name}", "sup", "ayoo", "wassup", "hey"])
-
+        # Expanded greetings
+        if any(w in content for w in ["hi", "hello", "hola", "wassup", "yo", "sup", "hey", "hui", "ola"]):
+            greet = [
+                "yo",
+                "sup",
+                "hola",
+                "hey",
+                "wassup",
+                "hi?",
+                "hello there",
+                "yoo what's good",
+                "sup chat",
+                "hey hey"
+            ]
+            return random.choice(greet)
+            
         # ---------------- Personal / Emotional Questions ----------------
         if any(word in content for word in ["lonely", "alone", "sad", "love u", "miss u", "think of me"]):
             emotional_replies = [
