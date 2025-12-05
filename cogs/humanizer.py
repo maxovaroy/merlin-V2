@@ -65,7 +65,8 @@ class Humanizer(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self._last_reply: Dict[int, float] = {}
-        self._memory: Dict[int, str] = {}
+        self._memory: Dict[int, List[str]] = []  # store last 5 messages per user
+        MAX_MEMORY = 10  # maximum messages to remember
         self.lock = asyncio.Lock()
 
     # ---------------- Helper functions ----------------
