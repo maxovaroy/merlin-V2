@@ -1,110 +1,76 @@
 # cogs/humanizer.py
 
 """
-Humanizer Cog — “Real-Text Bot” for Realm Royz
--------------------------------------------------
-Purpose:
-- Makes the bot reply to user messages in a more human-like chat style,
-  using slang/shortforms, casual tone, contextual memory, and configurable personality.
+HUMANIZER — Human-like chat generator for Realm Royz
+----------------------------------------------------
+Responds casually like a real person using slang, fillers & tone.
+Works **only in the configured channel** and ignores all others.
 
-Features:
-- Toggleable human-style auto-replies
-- Slang / shortform mapping (e.g. cuz → because, gn → goodnight, u → you, smol → small)
-- Basic mood/personality influenced by user’s aura / level
-- Reply probability / cooldown to avoid spam
-- Simple short-term memory (last user message), extensible to longer history
-- Admin commands to configure behavior per server or globally
-- “Preview mode” to see how the bot would respond to a given input
-- Safety: respects that other cogs/commands run first; ignores bot/commands
-- Easy to extend: build conversation flows, empathy, reactions, jokes, etc.
-
-Configure at the top section. Later sections are modular — you can enable/disable.
-
-To Do (future):
-- Per-user style preferences (formal / slangy / meme / chaotic)
-- Language filter, blacklist, context memory DB
-- Reaction to triggers, keyword-based replies, mini-games, “quote back” mode
+You can customize the tone, slang style, probabilities & memory easily.
 """
 
 import asyncio
 import random
 import time
-from typing import Optional, Dict
+from typing import Dict, Optional
 
 import discord
 from discord.ext import commands
 
-# --------------- CONFIG SECTION (Edit as you like) ---------------
+# ========================= CONFIG =========================
 
-# Enable / disable humanizer globally
 ENABLE_HUMANIZER = True
 
-# Probability that bot replies to a user message (0.0 — never, 1.0 — always)
-REPLY_PROBABILITY = 0.12
+# "Humanizer will only reply in THIS channel"
+HUMANIZER_CHANNEL = 1446421555965067354     # <--- your channel
 
-# Minimum user level to get full “friendly bot” tone
-MIN_LEVEL_FOR_FRIENDLY = 5
+# Probability of replying to a message
+REPLY_PROBABILITY = 1.0       # 1.0 = always reply, 0.3 = 30% chance
 
-# Cooldown per user (seconds) — prevents bot replying too often to same user
-USER_COOLDOWN = 60   # bot will reply max once per minute to same user
+# Cooldown per user between replies (seconds)
+USER_COOLDOWN = 5
 
-# Minimum message length (characters) before replying
-MIN_MSG_LENGTH = 5
-
-# Slang / shortform mapping — you can add more
-SLANG_MAP = {
-    " cuz ": " because ",
-    "brb": "be right back",
-    "u ": "you ",
-    " ur ": " your ",
-    "smol": "small",
-    "gn": "goodnight",
-    "idk": "I don't know",
-    "lol": "haha",
-    "omg": "oh my god",
-    "wtf": "what the heck",
-}
-
-# Tone settings — how bot speaks depending on mood
-# Example: neutral → casual, high_aura → supportive/friendly, low_aura → chaotic/sarcastic
-TONE_MOOD = {
-    "neutral": {
-        "prefix": "",
-        "suffix": "",
-    },
-    "friendly": {
-        "prefix": "",
-        "suffix": " 🙂",
-    },
-    "sarcastic": {
-        "prefix": "",
-        "suffix": " 😏",
-    },
-    "chaotic": {
-        "prefix": "",
-        "suffix": " 🤪",
-    }
-}
-
-# Memory usage — whether bot should remember last message per user for context
+# Use short memory to remember last message per user
 USE_MEMORY = True
+MIN_MSG_LENGTH = 2
 
-# --------------- End CONFIG ---------------
+# Slang mapping (more natural)
+SLANG_MAP = {
+    "you": "u",
+    "your": "ur",
+    "are": "r",
+    "because": "cuz",
+    "little": "smol",
+    "tonight": "tnite",
+    "good night": "gn",
+    "good morning": "gm",
+    "brother": "bro",
+}
+
+FILLERS = ["ngl", "lol", "idk", "fr", "no cap", "ong", "btw", "lmao", "hmmm"]
+
+# Tone style presets
+TONE_MOOD = {
+    "friendly": {"prefix": "", "suffix": " 😄"},
+    "neutral": {"prefix": "", "suffix": ""},
+    "chaotic": {"prefix": "yo ", "suffix": " 💀"},
+}
+
+MIN_LEVEL_FOR_FRIENDLY = 5  # Change as you like
+
+# ==========================================================
+
 
 class Humanizer(commands.Cog):
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot):
         self.bot = bot
-        # per-user cooldown tracker: user_id -> timestamp of last bot reply
         self._last_reply: Dict[int, float] = {}
-        # simple memory store: user_id -> last message content
         self._memory: Dict[int, str] = {}
-        self._lock = asyncio.Lock()
+        self.lock = asyncio.Lock()
 
-    # ---------------- Utility Methods ----------------
+    # ---------------- Helper functions ----------------
 
-    def _should_reply(self, user: discord.Member) -> bool:
-        if not ENABLE_HUMANIZER:
-            return False
+    def _should_reply(self, user):
         now = time.time()
         last = self._last_reply.get(user.id, 0)
         if now - last < USER_COOLDOWN:
@@ -112,135 +78,92 @@ class Humanizer(commands.Cog):
         return random.random() < REPLY_PROBABILITY
 
     def _apply_slang(self, text: str) -> str:
-        lowered = text.lower()
-        for slang, full in SLANG_MAP.items():
-            if slang in lowered:
-                # replace respecting case roughly (simple method)
-                text = text.replace(slang, full)
+        for normal, slang in SLANG_MAP.items():
+            text = text.replace(normal, slang).replace(normal.capitalize(), slang)
         return text
 
-    async def _get_user_stats(self, user: discord.Member):
-        """
-        Fetch user data: level, aura — to determine tone.
-        Depends on your LevelCog + Aura cog existing.
-        """
-        level = 0
-        aura = 0
-        # Get level
-        try:
-            level_cog = self.bot.get_cog("LevelCog")
-            if level_cog:
+    async def _get_user_stats(self, user):
+        """Level & aura influence tone (optional integration)"""
+        level, aura = 1, 0
+        level_cog = self.bot.get_cog("LevelCog")
+        if level_cog:
+            try:
                 xp, level = await level_cog.get_user_level_data(user.guild.id, user.id)
-        except Exception:
-            pass
+            except:
+                pass
 
-        # Get aura
-        try:
-            aura_cog = self.bot.get_cog("Aura")
-            if aura_cog:
+        aura_cog = self.bot.get_cog("Aura")
+        if aura_cog:
+            try:
                 row = await aura_cog._get_user_row(str(user.id))
-                aura = int(row[4]) if row and len(row) >= 5 else 0
-        except Exception:
-            pass
+                aura = int(row[4]) if row else 0
+            except:
+                pass
 
         return level, aura
 
-    def _choose_tone(self, level: int, aura: int) -> str:
-        """
-        Picks a tone string based on level/aura.
-        You can refine logic as you like.
-        """
-        if aura >= 1000 or level >= MIN_LEVEL_FOR_FRIENDLY:
+    def _tone(self, level, aura):
+        if level >= MIN_LEVEL_FOR_FRIENDLY or aura > 1000:
             return "friendly"
-        elif aura < 100 and level < 3:
+        if level <= 2:
             return "chaotic"
-        else:
-            return "neutral"
+        return "neutral"
 
-    async def _generate_reply(self, msg: discord.Message) -> Optional[str]:
-        """
-        Basic reply generator: uses simple transformations.
-        Override / expand this for smarter behavior.
-        """
+    async def _generate_reply(self, msg):
         content = msg.content.strip()
-        if len(content) < MIN_MSG_LENGTH:
-            return None
 
-        # Simple echo-based reply: send back with shortform translation
-        reply = content
+        reply = self._apply_slang(content)
 
-        # apply slang translation
-        reply = self._apply_slang(reply)
+        if any(greet in content.lower() for greet in ["hi", "hello", "hey"]):
+            return f"hey {msg.author.display_name}"
 
-        # maybe add a short remark or tweak
-        # e.g. if user says hi/hello → reply hello
-        lowered = reply.lower()
-        if any(greet in lowered for greet in ["hello", "hi", "hey"]):
-            reply = f"Hey {msg.author.display_name}!"
-        elif lowered.endswith("?"):
-            reply = "Hmm, good question... 🤔"
-        else:
-            # randomly chop off some words / add filler
-            words = reply.split()
-            if len(words) > 5 and random.random() < 0.4:
-                reply = " ".join(words[:-1])  # drop last word
-            # add casual filler
-            if random.random() < 0.3:
-                reply += random.choice(["", " lol", " haha", " 🙂", " 🤪"])
+        if content.endswith("?"):
+            return random.choice(["hmm good q 🤔", "idk fr", "lemme think abt that"])
+
+        if random.random() < 0.3:
+            reply += " " + random.choice(FILLERS)
 
         return reply
 
-    # ---------------- Bot Event Listeners ----------------
+    # ---------------- Listener ----------------
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
-        # Wait until other cogs process first
-        await self.bot.process_commands(message)
 
-        # Bot should not reply to itself or other bots
+        if not ENABLE_HUMANIZER:
+            return
+        
+        # Must be inside the dedicated channel
+        if message.channel.id != HUMANIZER_CHANNEL:
+            return
+        
         if message.author.bot:
             return
-        # Ignore commands (start with prefix)
+        
         if message.content.startswith(self.bot.command_prefix):
             return
 
-        # Decide if bot should reply
         if not self._should_reply(message.author):
             return
 
-        # Lock to avoid concurrency issues
-        async with self._lock:
+        async with self.lock:
+
             level, aura = await self._get_user_stats(message.author)
-            tone = self._choose_tone(level, aura)
+            tone = TONE_MOOD[self._tone(level, aura)]
 
             reply = await self._generate_reply(message)
             if not reply:
                 return
 
-            # apply tone
-            style = TONE_MOOD.get(tone, TONE_MOOD["neutral"])
-            final_msg = f"{style['prefix']}{reply}{style['suffix']}"
+            final = f"{tone['prefix']}{reply}{tone['suffix']}"
 
-            try:
-                await message.channel.typing()
-                # optional delay to simulate typing
-                await asyncio.sleep(random.uniform(0.5, 1.5))
-                await message.reply(final_msg, mention_author=False)
+            async with message.channel.typing():
+                await asyncio.sleep(random.uniform(0.4, 1.3))
+                await message.reply(final, mention_author=False)
                 self._last_reply[message.author.id] = time.time()
-            except Exception:
-                pass
 
-            # Optionally add XP for talking with bot (uncomment to enable)
-            # try:
-            #     level_cog = self.bot.get_cog("LevelCog")
-            #     if level_cog:
-            #         await level_cog.force_add_xp(message.guild.id, message.author.id, XP_PER_MESSAGE // 2)
-            # except:
-            #     pass
-
-            # Save memory if enabled
             if USE_MEMORY:
-                self._memory[message.author.id] = message.content.strip()
+                self._memory[message.author.id] = message.content
 
     # ---------------- Admin / Owner Commands ----------------
 
