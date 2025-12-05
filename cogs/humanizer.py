@@ -45,15 +45,23 @@ SLANG_MAP = {
     "good night": "gn",
     "good morning": "gm",
     "brother": "bro",
+    "tf": "tf",   # keep as-is  
+    "n u": "and u",  
+    "u": "u",  
+    "ur": "ur",  
+    "k": "k",  
+    "yea": "yea",  
+    "lol": "lol"
+
 }
 
 FILLERS = ["ngl", "lol", "idk", "fr", "no cap", "ong", "btw", "lmao", "hmmm"]
 
 # Tone style presets
 TONE_MOOD = {
-    "friendly": {"prefix": "", "suffix": " 😄"},
+    "friendly": {"prefix": "", "suffix": "<:Eminem:1308041429339209778>"},
     "neutral": {"prefix": "", "suffix": ""},
-    "chaotic": {"prefix": "yo ", "suffix": " 💀"},
+    "chaotic": {"prefix": "yo ", "suffix": "<:Hacker:1308134036937375794>"},
 }
 
 MIN_LEVEL_FOR_FRIENDLY = 5  # Change as you like
@@ -260,4 +268,3 @@ class Humanizer(commands.Cog):
 async def setup(bot: commands.Bot):
     await bot.add_cog(Humanizer(bot))
     print("[HUMANIZER] Humanizer cog loaded.")
-
