@@ -22,6 +22,7 @@ import asyncio
 import random
 import time
 from typing import Dict, List
+from typing import Optional
 
 import discord
 from discord.ext import commands
@@ -128,6 +129,8 @@ class Humanizer(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self._last_reply: Dict[int, float] = {}
+        self._last_bot_reply: Dict[int, str] = {}  # last reply bot sent to user
+        self._user_mood: Dict[int, str] = {}  # happy / sad / bored / chaotic
         self._memory: Dict[int, List[str]] = {}
         self._lock = asyncio.Lock()
         self._max_memory = MAX_MEMORY
@@ -183,6 +186,17 @@ class Humanizer(commands.Cog):
             return "chaotic"
         return "neutral"
 
+    def _threaded_callback(self, user_id: int, new_msg: str) -> Optional[str]:
+        """Maybe reference last user or bot message for continuity"""
+        reply = ""
+        if USE_MEMORY and user_id in self._memory and random.random() < 0.4:
+            past_user = random.choice(self._memory[user_id][-3:])  # last 3 messages
+            reply += f"lol remember when u said '{past_user[:25]}...'?"
+        if user_id in self._last_bot_reply and random.random() < 0.3:
+            reply += f" ngl like I said '{self._last_bot_reply[user_id][:25]}...'"
+        return reply or None
+
+    
     # ---------------- Reply Generation ----------------
 
     async def _generate_reply(self, msg: discord.Message) -> str:
@@ -243,7 +257,25 @@ class Humanizer(commands.Cog):
         if random.random() < 0.02:
             reply += " 🎉 mini easter egg unlocked!"
 
+        thread_ref = self._threaded_callback(msg.author.id, msg.content)
+        if thread_ref:
+            reply = f"{reply} — {thread_ref}"
+        
+        # Add dynamic fillers based on level / aura
+        level, aura = await self._get_user_stats(msg.author)
+        reply = self._dynamic_fillers(reply, level, aura)
+        
         return self._skidify(reply)
+        
+    def _dynamic_fillers(self, reply: str, level: int, aura: int) -> str:
+        """Add fillers based on level / aura"""
+        if random.random() < 0.2 + min(level, 10)*0.03:
+            reply += f" {random.choice(FILLERS)}"
+        if aura > 1000 and random.random() < 0.15:
+            reply += f" {random.choice(SARCASM_PHRASES)}"
+        return reply
+
+    
 
     # ---------------- Listener ----------------
 
