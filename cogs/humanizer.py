@@ -69,6 +69,20 @@ class Humanizer(commands.Cog):
         MAX_MEMORY = 10  # maximum messages to remember
         self.lock = asyncio.Lock()
 
+
+    def _typoify(self, text: str) -> str:
+        """Add human-like typos, letter repetition, and fillers"""
+        new_text = ""
+        for ch in text:
+            if random.random() < 0.05:
+                new_text += ch*random.randint(2,3)  # repeat letter randomly
+            else:
+                new_text += ch
+        if random.random() < 0.2:
+            new_text += " " + random.choice(FILLERS)
+        return new_text
+
+
     # ---------------- Helper functions ----------------
 
     def _should_reply(self, user):
