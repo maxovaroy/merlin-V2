@@ -135,8 +135,9 @@ class Humanizer(commands.Cog):
         if content.endswith("?"):
             return random.choice(["hmm good q 🤔", "idk fr", "lemme think abt that"])
 
-        if random.random() < 0.3:
-            reply += " " + random.choice(FILLERS)
+        # Add typo/filler randomness
+        if random.random() < 0.4:
+            reply = self._typoify(reply)
 
         # Refer to past messages randomly
         if USE_MEMORY and message.author.id in self._memory and random.random() < 0.3:
