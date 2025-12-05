@@ -259,4 +259,5 @@ class Humanizer(commands.Cog):
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(Humanizer(bot))
-    bot.logger.info("[HUMANIZER] Humanizer cog loaded.")
+    print("[HUMANIZER] Humanizer cog loaded.")
+
