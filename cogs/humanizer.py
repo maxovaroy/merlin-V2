@@ -209,7 +209,7 @@ class Humanizer(commands.Cog):
             await ctx.send("(No reply generated)")
             return
         level, aura = await self._get_user_stats(ctx.author)
-        tone = self._choose_tone(level, aura)
+        tone = self._tone(level, aura)
         style = TONE_MOOD.get(tone, TONE_MOOD["neutral"])
         final = f"{style['prefix']}{reply}{style['suffix']}"
         await ctx.send(f"> {text}\n**=>** {final}")
