@@ -124,6 +124,11 @@ class Humanizer(commands.Cog):
         if random.random() < 0.3:
             reply += " " + random.choice(FILLERS)
 
+        # Refer to past messages randomly
+        if USE_MEMORY and message.author.id in self._memory and random.random() < 0.3:
+            past = random.choice(self._memory[message.author.id])
+            reply += f" (btw u said: '{past[:30]}...')"
+
         return reply
 
     # ---------------- Listener ----------------
