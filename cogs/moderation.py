@@ -215,19 +215,21 @@ class Moderation(commands.Cog):
             logger.info("[MOD] Mute monitor loop cancelled")
 
     # ---------------- Safety checks ----------------
-    def _can_act_on(self, moderator: discord.Member, target: discord.Member) -> Tuple[bool, Optional[str]]:
+    def _can_act_on(self, moderator: discord.Member, target: discord.Member):
         """
-        Verify the moderator can act on the target. Return (allowed, reason).
+        Checks if moderator can act on target member.
+        Returns (allowed: bool, message: str)
         """
-        if moderator.id == target.id:
-            return False, "You cannot perform this action on yourself."
-        if target == self.bot.user:
-            return False, "You cannot perform this action on the bot."
-        if target.top_role >= moderator.top_role and moderator.guild.owner_id != moderator.id:
-            return False, "You cannot act on a member with equal or higher role."
-        if target.top_role >= self.bot.user.top_role:
-            return False, "The bot cannot act on this member due to role hierarchy."
-        return True, None
+        bot_member = moderator.guild.me  # Bot as a Member in this guild
+    
+        if target == moderator:
+            return False, "You cannot act on yourself."
+        if target.top_role >= moderator.top_role:
+            return False, "You cannot act on someone with an equal or higher role than you."
+        if target.top_role >= bot_member.top_role:
+            return False, "I cannot act on this member due to role hierarchy."
+        return True, ""
+
 
     # ---------------- Commands ----------------
 
