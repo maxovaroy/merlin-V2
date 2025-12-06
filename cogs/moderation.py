@@ -16,6 +16,7 @@ import asyncio
 import time
 import re
 from typing import Optional, List, Tuple
+from datetime import datetime, timedelta, timezone
 
 import aiosqlite
 import discord
@@ -199,11 +200,12 @@ class Moderation(commands.Cog):
     @commands.has_permissions(moderate_members=True)
     async def mute(self, ctx: commands.Context, member: discord.Member, duration: Optional[str]=None, *, reason: str="No reason provided"):
         allowed, msg = self._can_act_on(ctx.author, member)
-        if not allowed: return await ctx.send(f"⚠ {msg}")
-        seconds = self._parse_duration(duration) if duration else None
-        end_time = int(time.time()) + seconds if seconds else None
-        try:
-            await member.edit(timeout=seconds)
+            if seconds:
+                end_time_dt = datetime.now(timezone.utc) + timedelta(seconds=seconds)
+            else:
+                end_time_dt = None  # permanent mute / unmute
+            
+            await member.edit(communication_disabled_until=end_time_dt)
             human = f"Muted until <t:{end_time}:F> ({duration})" if seconds else "Muted permanently"
             await ctx.send(f"🔇 {member.mention} {human} | Reason: {reason}")
             # persist mute
@@ -224,7 +226,7 @@ class Moderation(commands.Cog):
         allowed, msg = self._can_act_on(ctx.author, member)
         if not allowed: return await ctx.send(f"⚠ {msg}")
         try:
-            await member.edit(timeout=None)
+            await member.edit(communication_disabled_until=None)
             async with aiosqlite.connect(DB_PATH) as db:
                 await db.execute("DELETE FROM mutes WHERE guild_id=? AND user_id=?", (ctx.guild.id, member.id))
                 await db.commit()
