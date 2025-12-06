@@ -1,15 +1,15 @@
 # cogs/moderation.py
 """
-Moderation Cog v2 — lightweight, polished
-Features implemented:
-- kick / ban / unban (safety checks)
-- mute / unmute (timed mute with persistence)
-- warn / warnings / delwarn (DB-backed)
-- clear (purge)
-- logs sent as embed to LOG_CHANNEL_ID
-- permission & hierarchy safety hardening
-- persistent DB (warnings, mutes, guild_settings)
-- background task to auto-unmute on expiry
+Moderation Cog v3 — lightweight, polished
+Features:
+- Kick / Ban / Unban (safety checks)
+- Timeout-based Mute / Unmute (with optional duration)
+- Warn / Warnings / Delwarn (DB-backed)
+- Clear / Purge messages
+- Logs as embeds to LOG_CHANNEL_ID
+- Permission & hierarchy safety
+- Persistent DB for mutes & warnings
+- Background task auto-unmutes on expiry
 """
 
 import asyncio
@@ -25,9 +25,8 @@ from logger import logger
 
 # ---------------- CONFIG ----------------
 DB_PATH = "database.db"
-LOG_CHANNEL_ID = 1177896378085679145  # <- set to your desired mod-log channel ID
-MUTE_ROLE_NAME = "Muted"
-MUTE_CHECK_INTERVAL = 10  # seconds between checks for expired mutes
+LOG_CHANNEL_ID = 1177896378085679145  # Mod-log channel ID
+MUTE_CHECK_INTERVAL = 10  # Seconds
 
 # ---------------- Cog ----------------
 class Moderation(commands.Cog):
@@ -40,8 +39,7 @@ class Moderation(commands.Cog):
     async def _init_db_and_restore(self):
         try:
             async with aiosqlite.connect(DB_PATH) as db:
-                await db.execute(
-                    """
+                await db.execute("""
                     CREATE TABLE IF NOT EXISTS warnings (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         guild_id INTEGER,
@@ -50,10 +48,8 @@ class Moderation(commands.Cog):
                         reason TEXT,
                         timestamp INTEGER
                     )
-                    """
-                )
-                await db.execute(
-                    """
+                """)
+                await db.execute("""
                     CREATE TABLE IF NOT EXISTS mutes (
                         guild_id INTEGER,
                         user_id INTEGER,
@@ -61,16 +57,7 @@ class Moderation(commands.Cog):
                         reason TEXT,
                         PRIMARY KEY (guild_id, user_id)
                     )
-                    """
-                )
-                await db.execute(
-                    """
-                    CREATE TABLE IF NOT EXISTS guild_settings (
-                        guild_id INTEGER PRIMARY KEY,
-                        mute_role_id INTEGER
-                    )
-                    """
-                )
+                """)
                 await db.commit()
             logger.info("[MOD] DB initialized")
 
@@ -78,13 +65,11 @@ class Moderation(commands.Cog):
             self._mute_task = self.bot.loop.create_task(self._mute_monitor_loop())
             logger.info("[MOD] Mute monitor task started")
         except Exception as e:
-            logger.exception(f"[MOD] DB/init error: {e}")
+            logger.exception("[MOD] DB/init error: %s", e)
 
-    # ---------------- Utility helpers ----------------
+    # ---------------- Utility ----------------
     def _parse_duration(self, s: Optional[str]) -> Optional[int]:
-        """
-        Parse durations like '1d2h30m', '2h', '45m'. Return seconds or None.
-        """
+        """Parse durations like '1d2h30m', '2h', '45m' → return seconds"""
         if not s:
             return None
         s = s.replace(" ", "").lower()
@@ -95,67 +80,11 @@ class Moderation(commands.Cog):
         days = int(m.group(1)) if m.group(1) else 0
         hours = int(m.group(2)) if m.group(2) else 0
         mins = int(m.group(3)) if m.group(3) else 0
-        total = days * 86400 + hours * 3600 + mins * 60
+        total = days*86400 + hours*3600 + mins*60
         return total if total > 0 else None
 
-    async def _get_mute_role(self, guild: discord.Guild) -> Optional[discord.Role]:
-        """
-        Return the Muted role for the guild, creating/configuring it if missing.
-        Stores role id in guild_settings table for future.
-        """
-        try:
-            # First check stored role id
-            async with aiosqlite.connect(DB_PATH) as db:
-                cur = await db.execute("SELECT mute_role_id FROM guild_settings WHERE guild_id=?", (guild.id,))
-                row = await cur.fetchone()
-            if row and row[0]:
-                role = guild.get_role(int(row[0]))
-                if role:
-                    return role
-
-            # Fallback: try to find role by name
-            role = discord.utils.get(guild.roles, name=MUTE_ROLE_NAME)
-            if role:
-                # persist it
-                async with aiosqlite.connect(DB_PATH) as db:
-                    await db.execute("INSERT OR REPLACE INTO guild_settings (guild_id, mute_role_id) VALUES (?, ?)",
-                                     (guild.id, role.id))
-                    await db.commit()
-                return role
-
-            # Create Muted role
-            perms = discord.Permissions(send_messages=False, speak=False, add_reactions=False)
-            try:
-                role = await guild.create_role(name=MUTE_ROLE_NAME, permissions=discord.Permissions.none(), reason="Create muted role for moderation cog")
-            except discord.Forbidden:
-                logger.warning("[MOD] Missing permission to create Muted role in guild %s", guild.id)
-                return None
-            except Exception as exc:
-                logger.exception("[MOD] Failed to create Muted role: %s", exc)
-                return None
-
-            # Set channel overrides to disallow send_messages & speak
-            for channel in guild.channels:
-                try:
-                    await channel.set_permissions(role, send_messages=False, speak=False, add_reactions=False)
-                except Exception:
-                    # ignore channels we can't set
-                    continue
-
-            # Persist role id
-            async with aiosqlite.connect(DB_PATH) as db:
-                await db.execute("INSERT OR REPLACE INTO guild_settings (guild_id, mute_role_id) VALUES (?, ?)", (guild.id, role.id))
-                await db.commit()
-
-            return role
-        except Exception as e:
-            logger.exception("[MOD] _get_mute_role error: %s", e)
-            return None
-
-    async def _log_embed(self, guild: discord.Guild, title: str, description: str, fields: Optional[List[Tuple[str, str, bool]]] = None):
-        """
-        Send an embed to the configured LOG_CHANNEL_ID. If not available, log locally.
-        """
+    async def _log_embed(self, guild: discord.Guild, title: str, description: str, fields: Optional[List[Tuple[str,str,bool]]] = None):
+        """Send an embed to LOG_CHANNEL_ID"""
         embed = discord.Embed(title=title, description=description, color=discord.Color.blurple(), timestamp=discord.utils.utcnow())
         if fields:
             for name, value, inline in fields:
@@ -166,17 +95,14 @@ class Moderation(commands.Cog):
             if log_channel:
                 await log_channel.send(embed=embed)
             else:
-                logger.warning("[MOD] LOG_CHANNEL_ID not found or bot cannot access it")
-                # fallback to logger
+                logger.warning("[MOD] LOG_CHANNEL_ID not found or inaccessible")
                 logger.info("[MOD LOG] %s: %s", title, description)
         except Exception as e:
             logger.exception("[MOD] Failed to send log embed: %s", e)
 
-    # ---------------- Timed mute monitor ----------------
+    # ---------------- Background mute monitor ----------------
     async def _mute_monitor_loop(self):
-        """
-        Background loop: checks mutes table for expired mutes, unmute them.
-        """
+        """Auto-unmute expired mutes"""
         try:
             while True:
                 try:
@@ -184,27 +110,21 @@ class Moderation(commands.Cog):
                     async with aiosqlite.connect(DB_PATH) as db:
                         cur = await db.execute("SELECT guild_id, user_id FROM mutes WHERE end_time IS NOT NULL AND end_time <= ?", (now,))
                         rows = await cur.fetchall()
-
                     for guild_id, user_id in rows:
                         guild = self.bot.get_guild(guild_id)
                         if not guild:
-                            # remove mute row to avoid stale data
                             async with aiosqlite.connect(DB_PATH) as db:
                                 await db.execute("DELETE FROM mutes WHERE guild_id=? AND user_id=?", (guild_id, user_id))
                                 await db.commit()
                             continue
-
                         member = guild.get_member(user_id)
-                        # attempt unmute
-                        role = discord.utils.get(guild.roles, name=MUTE_ROLE_NAME)
-                        if member and role and role in member.roles:
+                        if member:
                             try:
-                                await member.remove_roles(role, reason="Mute expired (auto unmute)")
-                                await self._log_embed(guild, "Auto Unmute", f"Automatically unmuted <@{user_id}> (mute expired).")
+                                await member.edit(timeout=None)
+                                await self._log_embed(guild, "Auto Unmute", f"Automatically unmuted {member.mention} (mute expired).")
                                 logger.info("[MOD] Auto-unmuted %s in guild %s", user_id, guild_id)
                             except Exception as exc:
                                 logger.exception("[MOD] Auto-unmute failed: %s", exc)
-                        # cleanup database
                         async with aiosqlite.connect(DB_PATH) as db:
                             await db.execute("DELETE FROM mutes WHERE guild_id=? AND user_id=?", (guild_id, user_id))
                             await db.commit()
@@ -214,60 +134,50 @@ class Moderation(commands.Cog):
         except asyncio.CancelledError:
             logger.info("[MOD] Mute monitor loop cancelled")
 
-    # ---------------- Safety checks ----------------
-    def _can_act_on(self, moderator: discord.Member, target: discord.Member):
-        """
-        Checks if moderator can act on target member.
-        Returns (allowed: bool, message: str)
-        """
-        bot_member = moderator.guild.me  # Bot as a Member in this guild
-    
+    # ---------------- Safety ----------------
+    def _can_act_on(self, moderator: discord.Member, target: discord.Member) -> Tuple[bool,str]:
+        """Return (allowed, reason)"""
+        bot_member = moderator.guild.me
         if target == moderator:
             return False, "You cannot act on yourself."
         if target.top_role >= moderator.top_role:
-            return False, "You cannot act on someone with an equal or higher role than you."
+            return False, "Cannot act on someone with equal/higher role."
         if target.top_role >= bot_member.top_role:
-            return False, "I cannot act on this member due to role hierarchy."
+            return False, "Cannot act due to bot role hierarchy."
         return True, ""
 
-
     # ---------------- Commands ----------------
-
     @commands.command(name="kick")
     @commands.has_permissions(kick_members=True)
-    async def kick(self, ctx: commands.Context, member: discord.Member, *, reason: str = "No reason provided"):
+    async def kick(self, ctx: commands.Context, member: discord.Member, *, reason: str="No reason provided"):
         allowed, msg = self._can_act_on(ctx.author, member)
-        if not allowed:
-            return await ctx.send(f"⚠ {msg}")
+        if not allowed: return await ctx.send(f"⚠ {msg}")
         try:
             await member.kick(reason=reason)
             await ctx.send(f"✅ Kicked {member.mention} | Reason: {reason}")
-            await self._log_embed(ctx.guild, "Member Kicked", f"{ctx.author.mention} kicked {member.mention}.", fields=[("Reason", reason, False)])
+            await self._log_embed(ctx.guild, "Member Kicked", f"{ctx.author.mention} kicked {member.mention}.", [("Reason", reason, False)])
             logger.info("[MOD] Kicked %s in guild %s by %s", member.id, ctx.guild.id, ctx.author.id)
         except discord.Forbidden:
-            await ctx.send("⚠ Bot lacks permission to kick this user.")
-            logger.warning("[MOD] Kick forbidden: %s", member.id)
+            await ctx.send("⚠ Bot lacks permission.")
         except Exception as e:
-            await ctx.send("⚠ Failed to kick user.")
-            logger.exception("[MOD] Kick failed: %s", e)
+            await ctx.send("⚠ Kick failed.")
+            logger.exception("Kick failed: %s", e)
 
     @commands.command(name="ban")
     @commands.has_permissions(ban_members=True)
-    async def ban(self, ctx: commands.Context, member: discord.Member, *, reason: str = "No reason provided"):
+    async def ban(self, ctx: commands.Context, member: discord.Member, *, reason: str="No reason provided"):
         allowed, msg = self._can_act_on(ctx.author, member)
-        if not allowed:
-            return await ctx.send(f"⚠ {msg}")
+        if not allowed: return await ctx.send(f"⚠ {msg}")
         try:
             await member.ban(reason=reason)
             await ctx.send(f"✅ Banned {member.mention} | Reason: {reason}")
-            await self._log_embed(ctx.guild, "Member Banned", f"{ctx.author.mention} banned {member.mention}.", fields=[("Reason", reason, False)])
+            await self._log_embed(ctx.guild, "Member Banned", f"{ctx.author.mention} banned {member.mention}.", [("Reason", reason, False)])
             logger.info("[MOD] Banned %s in guild %s by %s", member.id, ctx.guild.id, ctx.author.id)
         except discord.Forbidden:
-            await ctx.send("⚠ Bot lacks permission to ban this user.")
-            logger.warning("[MOD] Ban forbidden: %s", member.id)
+            await ctx.send("⚠ Bot lacks permission.")
         except Exception as e:
-            await ctx.send("⚠ Failed to ban user.")
-            logger.exception("[MOD] Ban failed: %s", e)
+            await ctx.send("⚠ Ban failed.")
+            logger.exception("Ban failed: %s", e)
 
     @commands.command(name="unban")
     @commands.has_permissions(ban_members=True)
@@ -277,189 +187,119 @@ class Moderation(commands.Cog):
             await ctx.guild.unban(user)
             await ctx.send(f"✅ Unbanned {user.mention}")
             await self._log_embed(ctx.guild, "Member Unbanned", f"{ctx.author.mention} unbanned {user.mention}.")
-            logger.info("[MOD] Unbanned %s in guild %s by %s", user_id, ctx.guild.id, ctx.author.id)
         except discord.NotFound:
             await ctx.send("⚠ User not found in ban list.")
-            logger.warning("[MOD] Unban not found: %s", user_id)
         except discord.Forbidden:
-            await ctx.send("⚠ Bot lacks permission to unban.")
-            logger.warning("[MOD] Unban forbidden")
+            await ctx.send("⚠ Bot lacks permission.")
         except Exception as e:
-            await ctx.send("⚠ Failed to unban user.")
-            logger.exception("[MOD] Unban failed: %s", e)
+            await ctx.send("⚠ Unban failed.")
+            logger.exception("Unban failed: %s", e)
 
     @commands.command(name="mute")
-    @commands.has_permissions(manage_roles=True)
-    async def mute(self, ctx: commands.Context, member: discord.Member, duration: Optional[str] = None, *, reason: str = "No reason provided"):
+    @commands.has_permissions(moderate_members=True)
+    async def mute(self, ctx: commands.Context, member: discord.Member, duration: Optional[str]=None, *, reason: str="No reason provided"):
         allowed, msg = self._can_act_on(ctx.author, member)
-        if not allowed:
-            return await ctx.send(f"⚠ {msg}")
-
-        # parse duration
-        seconds = None
-        end_time = None
-        if duration:
-            seconds = self._parse_duration(duration)
-            if seconds is None:
-                # If the duration token was actually part of the reason (e.g., no duration provided), treat it as reason
-                # but we require explicit duration for timed mute; if invalid, inform user.
-                await ctx.send("⚠ Invalid duration format. Examples: 1d, 2h30m, 45m. Use no duration for permanent mute.")
-                return
-            end_time = int(time.time()) + seconds
-
+        if not allowed: return await ctx.send(f"⚠ {msg}")
+        seconds = self._parse_duration(duration) if duration else None
+        end_time = int(time.time()) + seconds if seconds else None
         try:
-            role = await self._get_mute_role(ctx.guild)
-            if not role:
-                return await ctx.send("⚠ Could not create or find a Muted role. Check bot permissions.")
-            # check role hierarchy
-            if role >= ctx.author.top_role and ctx.author != ctx.guild.owner:
-                # if moderator cannot assign this role
-                await ctx.send("⚠ You cannot assign the Muted role due to role hierarchy.")
-                return
-            await member.add_roles(role, reason=reason)
-            # persist mute (end_time may be None for permanent mute)
+            await member.edit(timeout=seconds)
+            human = f"Muted until <t:{end_time}:F> ({duration})" if seconds else "Muted permanently"
+            await ctx.send(f"🔇 {member.mention} {human} | Reason: {reason}")
+            # persist mute
             async with aiosqlite.connect(DB_PATH) as db:
-                await db.execute("INSERT OR REPLACE INTO mutes (guild_id, user_id, end_time, reason) VALUES (?, ?, ?, ?)",
+                await db.execute("INSERT OR REPLACE INTO mutes (guild_id,user_id,end_time,reason) VALUES(?,?,?,?)",
                                  (ctx.guild.id, member.id, end_time, reason))
                 await db.commit()
-            # log
-            if end_time:
-                human = f"Muted until <t:{end_time}:F> ({duration})"
-            else:
-                human = "Muted permanently"
-            await ctx.send(f"🔇 {member.mention} {human} | Reason: {reason}")
-            await self._log_embed(ctx.guild, "Member Muted", f"{ctx.author.mention} muted {member.mention}.", fields=[("Duration", human, False), ("Reason", reason, False)])
-            logger.info("[MOD] Muted %s in guild %s by %s (duration=%s)", member.id, ctx.guild.id, ctx.author.id, duration)
+            await self._log_embed(ctx.guild, "Member Muted", f"{ctx.author.mention} muted {member.mention}.", [("Duration", human, False), ("Reason", reason, False)])
         except discord.Forbidden:
-            await ctx.send("⚠ Bot lacks permission to add roles.")
-            logger.warning("[MOD] Mute forbidden for %s", member.id)
+            await ctx.send("⚠ Bot lacks permission to mute.")
         except Exception as e:
-            await ctx.send("⚠ Failed to mute user.")
-            logger.exception("[MOD] Mute failed: %s", e)
+            await ctx.send("⚠ Mute failed.")
+            logger.exception("Mute failed: %s", e)
 
     @commands.command(name="unmute")
-    @commands.has_permissions(manage_roles=True)
+    @commands.has_permissions(moderate_members=True)
     async def unmute(self, ctx: commands.Context, member: discord.Member):
         allowed, msg = self._can_act_on(ctx.author, member)
-        if not allowed:
-            # allow moderators to unmute themselves? no — keep safety
-            return await ctx.send(f"⚠ {msg}")
+        if not allowed: return await ctx.send(f"⚠ {msg}")
         try:
-            role = discord.utils.get(ctx.guild.roles, name=MUTE_ROLE_NAME)
-            if not role:
-                return await ctx.send("⚠ No Muted role found.")
-            if role not in member.roles:
-                return await ctx.send("⚠ Member is not muted.")
-            await member.remove_roles(role, reason=f"Unmuted by {ctx.author}")
-            # remove DB entry
+            await member.edit(timeout=None)
             async with aiosqlite.connect(DB_PATH) as db:
                 await db.execute("DELETE FROM mutes WHERE guild_id=? AND user_id=?", (ctx.guild.id, member.id))
                 await db.commit()
             await ctx.send(f"🔊 Unmuted {member.mention}")
             await self._log_embed(ctx.guild, "Member Unmuted", f"{ctx.author.mention} unmuted {member.mention}.")
-            logger.info("[MOD] Unmuted %s in guild %s by %s", member.id, ctx.guild.id, ctx.author.id)
         except discord.Forbidden:
-            await ctx.send("⚠ Bot lacks permission to remove roles.")
-            logger.warning("[MOD] Unmute forbidden for %s", member.id)
+            await ctx.send("⚠ Bot lacks permission.")
         except Exception as e:
-            await ctx.send("⚠ Failed to unmute user.")
-            logger.exception("[MOD] Unmute failed: %s", e)
+            await ctx.send("⚠ Unmute failed.")
+            logger.exception("Unmute failed: %s", e)
 
     @commands.command(name="clear", aliases=["purge"])
     @commands.has_permissions(manage_messages=True)
-    async def clear(self, ctx: commands.Context, amount: int = 5):
-        if amount < 1:
-            return await ctx.send("⚠ Provide a number > 0.")
-        # limit to avoid accidental mass deletes
+    async def clear(self, ctx: commands.Context, amount: int=5):
+        if amount < 1: return await ctx.send("⚠ Provide a number > 0.")
         amount = min(amount, 1000)
         try:
             deleted = await ctx.channel.purge(limit=amount)
             await ctx.send(f"🧹 Deleted {len(deleted)} messages.", delete_after=6)
             await self._log_embed(ctx.guild, "Messages Purged", f"{ctx.author.mention} purged {len(deleted)} messages in {ctx.channel.mention}.")
-            logger.info("[MOD] Purged %s messages in guild %s by %s", len(deleted), ctx.guild.id, ctx.author.id)
         except discord.Forbidden:
             await ctx.send("⚠ Bot lacks permission to delete messages.")
-            logger.warning("[MOD] Purge forbidden in guild %s", ctx.guild.id)
         except Exception as e:
-            await ctx.send("⚠ Failed to purge messages.")
-            logger.exception("[MOD] Purge failed: %s", e)
+            await ctx.send("⚠ Purge failed.")
+            logger.exception("Purge failed: %s", e)
 
-    # ---------------- Warn system ----------------
     @commands.command(name="warn")
     @commands.has_permissions(kick_members=True)
-    async def warn(self, ctx: commands.Context, member: discord.Member, *, reason: str = "No reason provided"):
+    async def warn(self, ctx: commands.Context, member: discord.Member, *, reason: str="No reason provided"):
         allowed, msg = self._can_act_on(ctx.author, member)
-        if not allowed:
-            return await ctx.send(f"⚠ {msg}")
-        try:
-            ts = int(time.time())
-            async with aiosqlite.connect(DB_PATH) as db:
-                cur = await db.execute("INSERT INTO warnings (guild_id, user_id, moderator_id, reason, timestamp) VALUES (?, ?, ?, ?, ?)",
-                                       (ctx.guild.id, member.id, ctx.author.id, reason, ts))
-                warn_id = cur.lastrowid
-                await db.commit()
-            await ctx.send(f"⚠ Warned {member.mention} (case #{warn_id}) | Reason: {reason}")
-            await self._log_embed(ctx.guild, "User Warned", f"{ctx.author.mention} warned {member.mention}.", fields=[("Case", str(warn_id), True), ("Reason", reason, False)])
-            logger.info("[MOD] Warned %s in guild %s by %s (case %s)", member.id, ctx.guild.id, ctx.author.id, warn_id)
-        except Exception as e:
-            await ctx.send("⚠ Failed to issue warning.")
-            logger.exception("[MOD] Warn failed: %s", e)
+        if not allowed: return await ctx.send(f"⚠ {msg}")
+        ts = int(time.time())
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute("INSERT INTO warnings (guild_id,user_id,moderator_id,reason,timestamp) VALUES(?,?,?,?,?)",
+                                   (ctx.guild.id, member.id, ctx.author.id, reason, ts))
+            warn_id = cur.lastrowid
+            await db.commit()
+        await ctx.send(f"⚠ Warned {member.mention} (case #{warn_id}) | Reason: {reason}")
+        await self._log_embed(ctx.guild, "User Warned", f"{ctx.author.mention} warned {member.mention}.", [("Case", str(warn_id), True), ("Reason", reason, False)])
 
     @commands.command(name="warnings")
     @commands.has_permissions(kick_members=True)
     async def warnings(self, ctx: commands.Context, member: discord.Member):
-        try:
-            async with aiosqlite.connect(DB_PATH) as db:
-                cur = await db.execute("SELECT id, moderator_id, reason, timestamp FROM warnings WHERE guild_id=? AND user_id=? ORDER BY timestamp DESC", (ctx.guild.id, member.id))
-                rows = await cur.fetchall()
-            if not rows:
-                return await ctx.send(f"No warnings found for {member.mention}.")
-            embed = discord.Embed(title=f"Warnings for {member}", color=discord.Color.orange())
-            for wid, mod_id, reason, ts in rows:
-                t = discord.utils.format_dt(discord.utils.snowflake_time(1) if False else discord.utils.utcfromtimestamp(ts))
-                try:
-                    mod = await self.bot.fetch_user(mod_id)
-                    mod_repr = f"{mod} ({mod_id})"
-                except Exception:
-                    mod_repr = str(mod_id)
-                embed.add_field(name=f"Case #{wid}", value=f"By: {mod_repr}\nReason: {reason}\nAt: <t:{ts}:F>", inline=False)
-            await ctx.send(embed=embed)
-            logger.info("[MOD] Fetched warnings for %s in guild %s", member.id, ctx.guild.id)
-        except Exception as e:
-            await ctx.send("⚠ Failed to fetch warnings.")
-            logger.exception("[MOD] Fetch warnings failed: %s", e)
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute("SELECT id, moderator_id, reason, timestamp FROM warnings WHERE guild_id=? AND user_id=? ORDER BY timestamp DESC", (ctx.guild.id, member.id))
+            rows = await cur.fetchall()
+        if not rows: return await ctx.send(f"No warnings for {member.mention}.")
+        embed = discord.Embed(title=f"Warnings for {member}", color=discord.Color.orange())
+        for wid, mod_id, reason, ts in rows:
+            try: mod = await self.bot.fetch_user(mod_id); mod_repr = f"{mod} ({mod_id})"
+            except: mod_repr = str(mod_id)
+            embed.add_field(name=f"Case #{wid}", value=f"By: {mod_repr}\nReason: {reason}\nAt: <t:{ts}:F>", inline=False)
+        await ctx.send(embed=embed)
 
     @commands.command(name="delwarn")
     @commands.has_permissions(kick_members=True)
     async def delwarn(self, ctx: commands.Context, case_id: int):
-        try:
-            async with aiosqlite.connect(DB_PATH) as db:
-                cur = await db.execute("SELECT id, guild_id FROM warnings WHERE id=?", (case_id,))
-                row = await cur.fetchone()
-                if not row:
-                    return await ctx.send("Case not found.")
-                if row[1] != ctx.guild.id:
-                    return await ctx.send("Case ID not in this server.")
-                await db.execute("DELETE FROM warnings WHERE id=?", (case_id,))
-                await db.commit()
-            await ctx.send(f"✅ Deleted warning case #{case_id}.")
-            await self._log_embed(ctx.guild, "Warning Removed", f"{ctx.author.mention} removed warning case #{case_id}.")
-            logger.info("[MOD] Deleted warn case %s in guild %s by %s", case_id, ctx.guild.id, ctx.author.id)
-        except Exception as e:
-            await ctx.send("⚠ Failed to delete warning.")
-            logger.exception("[MOD] Delwarn failed: %s", e)
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute("SELECT id,guild_id FROM warnings WHERE id=?", (case_id,))
+            row = await cur.fetchone()
+            if not row: return await ctx.send("Case not found.")
+            if row[1] != ctx.guild.id: return await ctx.send("Case not in this server.")
+            await db.execute("DELETE FROM warnings WHERE id=?", (case_id,))
+            await db.commit()
+        await ctx.send(f"✅ Deleted warning case #{case_id}.")
+        await self._log_embed(ctx.guild, "Warning Removed", f"{ctx.author.mention} removed warning case #{case_id}.")
 
-    # ---------------- Cog lifecycle ----------------
+    # ---------------- Lifecycle ----------------
     async def cog_load(self):
         logger.info("[MOD] Moderation cog loaded.")
 
     async def cog_unload(self):
-        # cancel background tasks
         try:
             if hasattr(self, "_mute_task"):
                 self._mute_task.cancel()
-            if hasattr(self, "_restore_task"):
-                self._restore_task.cancel()
             logger.info("[MOD] Moderation cog unloaded.")
         except Exception:
             logger.exception("[MOD] Error unloading moderation cog")
