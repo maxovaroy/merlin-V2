@@ -200,20 +200,26 @@ class Moderation(commands.Cog):
     @commands.has_permissions(moderate_members=True)
     async def mute(self, ctx: commands.Context, member: discord.Member, duration: Optional[str]=None, *, reason: str="No reason provided"):
         allowed, msg = self._can_act_on(ctx.author, member)
-            if seconds:
-                end_time_dt = datetime.now(timezone.utc) + timedelta(seconds=seconds)
-            else:
-                end_time_dt = None  # permanent mute / unmute
-            
+        if not allowed:
+            return await ctx.send(f"⚠ {msg}")
+    
+        seconds = self._parse_duration(duration)
+        end_time_dt = datetime.now(timezone.utc) + timedelta(seconds=seconds) if seconds else None
+        db_end_time = int(time.time() + seconds) if seconds else None
+    
+        try:
             await member.edit(communication_disabled_until=end_time_dt)
-            human = f"Muted until <t:{end_time}:F> ({duration})" if seconds else "Muted permanently"
+            human = f"Muted until <t:{db_end_time}:F> ({duration})" if seconds else "Muted permanently"
             await ctx.send(f"🔇 {member.mention} {human} | Reason: {reason}")
+    
             # persist mute
             async with aiosqlite.connect(DB_PATH) as db:
                 await db.execute("INSERT OR REPLACE INTO mutes (guild_id,user_id,end_time,reason) VALUES(?,?,?,?)",
-                                 (ctx.guild.id, member.id, end_time, reason))
+                                 (ctx.guild.id, member.id, db_end_time, reason))
                 await db.commit()
+    
             await self._log_embed(ctx.guild, "Member Muted", f"{ctx.author.mention} muted {member.mention}.", [("Duration", human, False), ("Reason", reason, False)])
+            logger.info("[MOD] Muted %s in guild %s by %s (duration=%s)", member.id, ctx.guild.id, ctx.author.id, duration)
         except discord.Forbidden:
             await ctx.send("⚠ Bot lacks permission to mute.")
         except Exception as e:
@@ -224,18 +230,28 @@ class Moderation(commands.Cog):
     @commands.has_permissions(moderate_members=True)
     async def unmute(self, ctx: commands.Context, member: discord.Member):
         allowed, msg = self._can_act_on(ctx.author, member)
-        if not allowed: return await ctx.send(f"⚠ {msg}")
+        if not allowed:
+            return await ctx.send(f"⚠ {msg}")
+        
         try:
+            # Remove timeout
             await member.edit(communication_disabled_until=None)
+    
+            # Remove from database
             async with aiosqlite.connect(DB_PATH) as db:
                 await db.execute("DELETE FROM mutes WHERE guild_id=? AND user_id=?", (ctx.guild.id, member.id))
                 await db.commit()
+    
+            # Send feedback & log
             await ctx.send(f"🔊 Unmuted {member.mention}")
             await self._log_embed(ctx.guild, "Member Unmuted", f"{ctx.author.mention} unmuted {member.mention}.")
+            logger.info("[MOD] Unmuted %s in guild %s by %s", member.id, ctx.guild.id, ctx.author.id)
+    
         except discord.Forbidden:
-            await ctx.send("⚠ Bot lacks permission.")
+            await ctx.send("⚠ Bot lacks permission to unmute.")
+            logger.warning("[MOD] Unmute forbidden for %s", member.id)
         except Exception as e:
-            await ctx.send("⚠ Unmute failed.")
+            await ctx.send("⚠ Failed to unmute user.")
             logger.exception("Unmute failed: %s", e)
 
     @commands.command(name="clear", aliases=["purge"])
