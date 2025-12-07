@@ -1,76 +1,86 @@
 import aiosqlite
 import math
 import random
+import time
 from logger import logger
 
 DB_PATH = "database.db"
 
-# -----------------------
-# Initialize the database
-# -----------------------
+# ============================================================
+# DATABASE INITIALIZATION + MIGRATION CHECK
+# ============================================================
 async def init_db():
     async with aiosqlite.connect(DB_PATH) as db:
-        # Users table
+        # Create main table if missing
         await db.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 user_id TEXT PRIMARY KEY,
                 xp INTEGER DEFAULT 0,
                 level INTEGER DEFAULT 1,
                 messages INTEGER DEFAULT 0,
-                aura INTEGER DEFAULT 0
+                aura INTEGER DEFAULT 0,
+                streak_count INTEGER DEFAULT 0,
+                last_streak_claim INTEGER DEFAULT 0
             )
         """)
 
-        # Skin reports/votes table
-        await db.execute("""
-            CREATE TABLE IF NOT EXISTS skin_reports (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                skin_name TEXT NOT NULL,
-                user_id TEXT NOT NULL,
-                UNIQUE(skin_name, user_id)
-            )
-        """)
+        # Migrate if old installs do not have new streak columns
+        await db.execute("ALTER TABLE users ADD COLUMN streak_count INTEGER DEFAULT 0") \
+            if not await column_exists(db, "users", "streak_count") else None
+
+        await db.execute("ALTER TABLE users ADD COLUMN last_streak_claim INTEGER DEFAULT 0") \
+            if not await column_exists(db, "users", "last_streak_claim") else None
 
         await db.commit()
-    logger.info("Database initialized!")
 
-# -----------------------
-# User management
-# -----------------------
+    logger.info("Database initialized & migrated successfully.")
+
+
+async def column_exists(db, table, column):
+    cursor = await db.execute(f"PRAGMA table_info({table})")
+    columns = [row[1] for row in await cursor.fetchall()]
+    return column in columns
+
+
+# ============================================================
+# USER MANAGEMENT
+# ============================================================
 async def add_user(user_id: str):
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("INSERT OR IGNORE INTO users(user_id) VALUES(?)", (user_id,))
         await db.commit()
-    logger.debug(f"User added or already exists: {user_id}")
+    logger.debug(f"User added/existed: {user_id}")
+
 
 async def get_user(user_id: str):
     async with aiosqlite.connect(DB_PATH) as db:
-        cursor = await db.execute("SELECT * FROM users WHERE user_id = ?", (user_id,))
-        user = await cursor.fetchone()
-    logger.debug(f"Fetched user {user_id}: {user}")
-    return user
+        cur = await db.execute("SELECT * FROM users WHERE user_id=?", (user_id,))
+        return await cur.fetchone()
 
+
+async def get_all_users():  # for leaderboard pagination
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute("SELECT * FROM users ORDER BY level DESC, xp DESC")
+        return await cur.fetchall()
+
+
+# ============================================================
+# XP + LEVEL SYSTEM
+# ============================================================
 async def modify_aura(user_id: str, amount: int):
     async with aiosqlite.connect(DB_PATH) as db:
-        cursor = await db.execute("SELECT aura FROM users WHERE user_id = ?", (user_id,))
-        row = await cursor.fetchone()
+        cur = await db.execute("SELECT aura FROM users WHERE user_id=?", (user_id,))
+        row = await cur.fetchone()
         if not row:
             return False
+
         new_aura = max(row[0] + amount, 0)
-        await db.execute("UPDATE users SET aura = ? WHERE user_id = ?", (new_aura, user_id))
+        await db.execute("UPDATE users SET aura=? WHERE user_id=?", (new_aura, user_id))
         await db.commit()
-    logger.debug(f"Modified aura for {user_id}: {amount} -> new aura={new_aura}")
+
+    logger.debug(f"Aura updated for {user_id}: {amount:+} → {new_aura}")
     return True
 
-def random_aura_for_level(level: int) -> int:
-    if 1 <= level <= 10:
-        return random.randint(1, 100)
-    elif 11 <= level <= 20:
-        return random.randint(101, 300)
-    elif 21 <= level <= 30:
-        return random.randint(301, 500)
-    else:
-        return random.randint(501, 1000)
 
 async def update_user(user_id: str, xp_gain: int = 10):
     async with aiosqlite.connect(DB_PATH) as db:
@@ -80,55 +90,64 @@ async def update_user(user_id: str, xp_gain: int = 10):
             WHERE user_id = ?
         """, (xp_gain, user_id))
 
-        cursor = await db.execute("SELECT xp, level, aura FROM users WHERE user_id = ?", (user_id,))
-        row = await cursor.fetchone()
+        cur = await db.execute("SELECT xp, level, aura FROM users WHERE user_id=?", (user_id,))
+        row = await cur.fetchone()
+
         if row:
             xp, level, aura = row
             new_level = int(math.sqrt(xp // 10)) + 1
+
             if new_level > level:
-                gained_aura = random_aura_for_level(new_level)
-                aura += gained_aura
-                logger.info(f"User {user_id} leveled up from {level} to {new_level}, gained {gained_aura} aura.")
-            await db.execute("UPDATE users SET level = ?, aura = ? WHERE user_id = ?", (new_level, aura, user_id))
-            logger.debug(f"Updated user {user_id}: level={new_level}, xp={xp}, aura={aura}")
+                gained = random_aura_for_level(new_level)
+                aura += gained
+                logger.info(f"[LEVEL-UP] {user_id}: L{level} → L{new_level} (+{gained} aura)")
+
+            await db.execute("UPDATE users SET level=?, aura=? WHERE user_id=?",
+                             (new_level, aura, user_id))
 
         await db.commit()
 
-# -----------------------
-# Skin report / vote system
-# -----------------------
-async def add_skin_report(user_id: str, skin_name: str):
-    """Add a skin report / suggestion for a user."""
-    skin_name = skin_name.strip()
-    async with aiosqlite.connect(DB_PATH) as db:
-        try:
-            await db.execute("INSERT INTO skin_reports(user_id, skin_name) VALUES(?, ?)", (user_id, skin_name))
-            await db.commit()
-            logger.debug(f"User {user_id} reported skin: {skin_name}")
-            return True
-        except aiosqlite.IntegrityError:
-            return False  # already reported by this user
 
-async def vote_skin(user_id: str, skin_name: str):
-    """Vote for a skin (same as report, prevents duplicate votes)."""
-    return await add_skin_report(user_id, skin_name)
+def random_aura_for_level(level: int):
+    if level <= 10: return random.randint(1, 100)
+    if level <= 20: return random.randint(101, 300)
+    if level <= 30: return random.randint(301, 500)
+    return random.randint(501, 1000)
 
-async def get_top_reports(limit: int = 10):
-    """Return top skins by vote count."""
-    async with aiosqlite.connect(DB_PATH) as db:
-        cursor = await db.execute("""
-            SELECT skin_name, COUNT(*) as votes
-            FROM skin_reports
-            GROUP BY skin_name
-            ORDER BY votes DESC
-            LIMIT ?
-        """, (limit,))
-        rows = await cursor.fetchall()
-        return rows
 
-async def remove_skin_report(skin_name: str):
-    """Remove a skin from reports/votes table."""
+# ============================================================
+# DAILY STREAK SYSTEM
+# ============================================================
+async def claim_daily(user_id: str, base_reward_xp=50, base_reward_aura=50):
     async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute("DELETE FROM skin_reports WHERE skin_name = ?", (skin_name.strip(),))
+        cur = await db.execute("SELECT streak_count, last_streak_claim FROM users WHERE user_id=?", (user_id,))
+        row = await cur.fetchone()
+
+        if not row:
+            return None
+
+        streak, last_claim = row
+        now = int(time.time())
+
+        # 24h reset logic
+        if now - last_claim < 86400:
+            return False, streak, 0, 0  # not ready
+
+        # if claim after 2+ days → streak reset
+        if last_claim != 0 and now - last_claim > 172800:
+            streak = 1
+        else:
+            streak += 1
+
+        # reward increases with streak
+        xp_reward = int(base_reward_xp * (1 + 0.1 * (streak - 1)))
+        aura_reward = int(base_reward_aura * (1 + 0.1 * (streak - 1)))
+
+        await db.execute("""
+            UPDATE users 
+            SET streak_count=?, last_streak_claim=?, xp=xp+?, aura=aura+?
+            WHERE user_id=?
+        """, (streak, now, xp_reward, aura_reward, user_id))
+
         await db.commit()
-    logger.debug(f"Removed skin report: {skin_name}")
+        return True, streak, xp_reward, aura_reward
