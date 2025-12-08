@@ -91,7 +91,7 @@ class Profile(commands.Cog):
             if not user_row:
                 return await ctx.send("⚠ No profile found! Try chatting first to create a profile.")
 
-            _, db_xp, db_level, messages, aura = user_row
+            _, db_xp, db_level, messages, aura, streak_count, last_streak_claim = user_row
 
             # get progress via LevelSystem cog
             xp, level, current_in_level, xp_needed, frac = await self._get_level_data(user_id, guild_id)
